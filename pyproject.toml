@@ -1,0 +1,18 @@
+[tool.ruff]
+line-length = 90
+target-version = "py314"
+
+[tool.ruff.lint]
+select = [
+    "E4", # Import errors
+    "E7", # Statement errors
+    "E9", # Runtime-related errors
+    "F", # Pyflakes: unused imports, undefined names, etc.
+    "I", # Import sorting
+    "UP", # Modern Python syntax
+    "B", # Common bug-prone patterns
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
