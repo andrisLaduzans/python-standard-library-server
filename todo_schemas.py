@@ -1,6 +1,12 @@
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import TypeVar
+
 from error import ValidationError
 from http_method import Method
 from todo import Todo, TodoField
+
+EnumT = TypeVar("EnumT", bound=StrEnum)
 
 
 class SchemaValidator:
@@ -30,29 +36,137 @@ class SchemaValidator:
             if field not in fields:
                 raise ValidationError(f"Unknown Field '{field}'")
 
+    @staticmethod
+    def _single_value(params: dict[str, list[str]], key: str) -> str | None:
+        values = params.get(key)
 
+        if values is None:
+            return None
+
+        if len(values) != 1:
+            raise ValidationError(f"More Than One Query Param With Key: '{key}'")
+
+        return values[0]
+
+    @classmethod
+    def _parse_bool(cls, params: dict[str, list[str]], key) -> bool | None:
+        value = cls._single_value(params, key)
+
+        if value is None:
+            return None
+
+        if value not in ("true", "false"):
+            raise ValidationError(f"'{key}' Must Be 'true' or 'false'")
+
+        return value == "true"
+
+    @classmethod
+    def _parse_int(cls, params: dict[str, list[str]], key, default) -> int:
+        value = cls._single_value(params, key)
+        if value is None:
+            return default
+
+        try:
+            value = int(value)
+            if value < 0:
+                raise ValidationError(f"Query Param '{key}' must be positive number")
+
+            return value
+        except ValueError as error:
+            raise ValidationError(f"Query Param '{key}' Must Be An Integer") from error
+
+    @classmethod
+    def _parse_str(
+        cls, params: dict[str, list[str]], key: str, default: str | None
+    ) -> str | None:
+        value = cls._single_value(params, key)
+
+        if value is None:
+            return None if default is None else default
+
+        if not isinstance(value, str) or not value.strip():
+            raise ValidationError(f"Query Param '{key}' Should Be Non-Empty String")
+
+        return value
+
+    @classmethod
+    def _one_of_items(cls, key: str, value: str | None, enum: type[EnumT]) -> EnumT:
+        try:
+            if value is None:
+                raise ValueError
+            return enum(value)
+        except ValueError:
+            raise ValidationError(
+                f"Invalid Value For '{key}': {value}\n"
+                f"Expected One Of {[item.value for item in enum]}"
+            )
+
+
+class TodoSortBy(StrEnum):
+    ID = "rowid"
+    NAME = TodoField.NAME
+    DESCRIPTION = TodoField.DESCRIPTION
+    IS_DONE = TodoField.IS_DONE
+
+
+class SortOrder(StrEnum):
+    ASC = "asc"
+    DESC = "desc"
+
+
+@dataclass(frozen=True, slots=True)
 class TodoListQuery(SchemaValidator):
-    def __init__(self, is_done: bool | None = None):
-        self.is_done = is_done
+    is_done: bool | None = None
+    limit: int = 20
+    offset: int = 0
+    sort_by: TodoSortBy = TodoSortBy.ID
+    sort_order: SortOrder = SortOrder.ASC
+
+    MAX_LIMIT = 100
+    ALLOWED_SORT_BY = [TodoSortBy.NAME, TodoSortBy.DESCRIPTION, TodoSortBy.IS_DONE]
 
     @classmethod
     def from_query_params(
         cls, params: dict[str, list[str]] | None = None
     ) -> TodoListQuery:
-        if not params:
-            return cls()
+        params = params or {}
 
-        values = params.get(TodoField.IS_DONE)
-        if values is None:
-            return cls()
+        is_done = SchemaValidator._parse_bool(params, "is_done")
+        limit = SchemaValidator._parse_int(params, "limit", default=20)
+        offset = SchemaValidator._parse_int(params, "offset", default=0)
+        sort_by = SchemaValidator._parse_str(params, "sort_by", default=TodoSortBy.ID)
+        sort_order = SchemaValidator._parse_str(
+            params, "sort_order", default=SortOrder.ASC
+        )
 
-        if len(values) != 1 or values[0] not in ("true", "false"):
-            raise ValidationError(f"'{TodoField.IS_DONE}' Must Be 'true' or 'false'")
+        if not 1 <= limit <= cls.MAX_LIMIT:
+            raise ValidationError(f"'limit' Must Be Between 1 And {cls.MAX_LIMIT}")
 
-        return cls(is_done=values[0] == "true")
+        if offset < 0:
+            raise ValidationError("'offset' Must Be Non-Negative")
+
+        sort_by = SchemaValidator._one_of_items("sort_by", sort_by, TodoSortBy)
+        sort_order = SchemaValidator._one_of_items("sort_order", sort_order, SortOrder)
+
+        return cls(
+            is_done=is_done,
+            limit=limit,
+            offset=offset,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
 
     def __str__(self) -> str:
-        return str({TodoField.IS_DONE.value: self.is_done})
+        return str(self.to_dict())
+
+    def to_dict(self) -> dict[str, bool | None | int | str]:
+        return {
+            TodoField.IS_DONE.value: self.is_done,
+            "limit": self.limit,
+            "offset": self.offset,
+            "sort_by": self.sort_by,
+            "sort_order": self.sort_order,
+        }
 
 
 class TodoCreateRequest(SchemaValidator):

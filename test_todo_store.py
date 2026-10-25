@@ -4,6 +4,7 @@ from pathlib import Path
 
 from database import Database
 from todo import TodoField
+from todo_schemas import SortOrder, TodoSortBy
 from todo_store import TodoStore
 
 
@@ -48,6 +49,14 @@ class TodoStoreTest(unittest.TestCase):
                 ],
             )
 
+    def test_read_pagination(self):
+        for offset in range(3):
+            entries = self.store.read(limit=1, offset=offset)
+            self.assertEqual(
+                [{TodoField.NAME: f"todo_{offset}"}],
+                [{TodoField.NAME: entry.name} for entry in entries],
+            )
+
     def test_find_by_id(self):
         non_exiting = self.store.find_by_id("non-existent")
         self.assertIsNone(non_exiting)
@@ -61,3 +70,9 @@ class TodoStoreTest(unittest.TestCase):
                 {TodoField.NAME: "todo_0"},
                 {TodoField.NAME: result.name if result else ""},
             )
+
+    def test_sorting_by(self):
+        entries = self.store.read(sort_by=TodoSortBy.NAME, sort_order=SortOrder.DESC)
+        expected = ["todo_2", "todo_1", "todo_0"]
+        result = [entry.name for entry in entries]
+        self.assertEqual(expected, result)

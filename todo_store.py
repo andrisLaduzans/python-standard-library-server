@@ -2,6 +2,7 @@ from contextlib import closing
 
 from database import Database
 from todo import Todo
+from todo_schemas import SortOrder, TodoListQuery, TodoSortBy
 
 
 class TodoStore:
@@ -13,8 +14,10 @@ class TodoStore:
         todo_id, name, description, is_done = row
         return Todo(name, description, bool(is_done), todo_id)
 
-    def create(self, name: str, description: str | None = None) -> Todo:
-        todo = Todo(name, description)
+    def create(
+        self, name: str, description: str | None = None, is_done: bool = False
+    ) -> Todo:
+        todo = Todo(name, description, is_done)
 
         with closing(self._database.connect()) as connection:
             with connection:
@@ -28,35 +31,47 @@ class TodoStore:
 
         return todo
 
-    def read(self, is_done: bool | None = None) -> list[Todo]:
+    def read(
+        self,
+        is_done: bool | None = None,
+        limit: int = TodoListQuery().limit,
+        offset: int = TodoListQuery().offset,
+        sort_by: TodoSortBy = TodoSortBy.ID,
+        sort_order: SortOrder = TodoListQuery().sort_order,
+    ) -> list[Todo]:
         query = """
             SELECT id, name, description, is_done
-            FROM todos 
+            FROM todos
             """
 
-        params = ()
+        params: list[int | str] = []
 
         if is_done is not None:
-            query += " WHERE is_done = ?"
-            params = (int(is_done),)
+            query += "WHERE is_done = ? "
+            params.append(int(is_done))
 
-        query += " ORDER BY rowid"
+        query += f"ORDER BY {sort_by.value} {sort_order.upper()}, id ASC "
+
+        query += "LIMIT ? OFFSET ?"
+        params.extend((limit, offset))
 
         with closing(self._database.connect()) as connection:
+            # debug print sql query
+            # connection.set_trace_callback(print)
             rows = connection.execute(query, params).fetchall()
 
         return [self._to_todo(row) for row in rows]
 
     def find_by_id(self, todo_id: str) -> Todo | None:
-        with closing(self._database.connect()) as connection:
-            row = connection.execute(
-                """
+        query = """
             SELECT id, name, description, is_done
             FROM todos
             WHERE id = ? 
-            """,
-                (todo_id,),
-            ).fetchone()
+            """
+        params = (todo_id,)
+
+        with closing(self._database.connect()) as connection:
+            row = connection.execute(query, params).fetchone()
 
         return self._to_todo(row) if row else None
 

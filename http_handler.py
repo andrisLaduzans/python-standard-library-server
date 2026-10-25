@@ -115,11 +115,17 @@ class HttpHandler(BaseHTTPRequestHandler):
 
     def get_todos(self, params=None, query=None):
         query_params = TodoListQuery.from_query_params(query)
-        todos = self.service.get_all(is_done=query_params.is_done)
+        todos = self.service.get_all(
+            is_done=query_params.is_done,
+            limit=query_params.limit,
+            offset=query_params.offset,
+            sort_by=query_params.sort_by,
+            sort_order=query_params.sort_order,
+        )
         self.__response(HTTPStatus.OK, todos)
 
     def get_todo(self, params: dict, query=None):
-        todo = self.service.get(params[TodoField.ID])
+        todo = self.service.find_by_id(params[TodoField.ID])
         self.__response(HTTPStatus.OK, todo)
 
     def delete_todo(self, params: dict, query=None):

@@ -1,4 +1,5 @@
 from error import TodoNotFoundError
+from todo_schemas import SortOrder, TodoSortBy
 from todo_store import TodoStore
 
 
@@ -6,11 +7,18 @@ class TodoService:
     def __init__(self, store: TodoStore):
         self._store = store
 
-    def get_all(self, is_done: bool | None = None) -> list[dict]:
-        todos = self._store.read(is_done)
+    def get_all(
+        self,
+        is_done: bool | None,
+        limit: int,
+        offset: int,
+        sort_by: TodoSortBy,
+        sort_order: SortOrder,
+    ) -> list[dict]:
+        todos = self._store.read(is_done, limit, offset, sort_by, sort_order)
         return [todo.to_dict() for todo in todos]
 
-    def get(self, uuid: str) -> dict:
+    def find_by_id(self, uuid: str) -> dict:
         todo = self._store.find_by_id(uuid)
         if not todo:
             raise TodoNotFoundError()
