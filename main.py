@@ -5,7 +5,8 @@ from dotenv import load_dotenv
 
 from database import Database
 from http_handler import HttpHandler
-from router import Router
+from http_method import Method
+from router import Router, Routes
 from server import Server
 from todo_store import TodoStore
 
@@ -25,11 +26,11 @@ def serve():
     store = TodoStore(database)
 
     router = Router()
-    router.add_route("GET", "/todos", HttpHandler.get_todos)
-    router.add_route("POST", "/todos", HttpHandler.create_todo)
-    router.add_route("GET", "/todos/:id", HttpHandler.get_todo)
-    router.add_route("DELETE", "/todos/:id", HttpHandler.delete_todo)
-    router.add_route("PATCH", "/todos/:id", HttpHandler.update_todo)
+    router.add_route(Method.GET, Routes.Todos.todos, HttpHandler.get_todos)
+    router.add_route(Method.POST, Routes.Todos.todos, HttpHandler.create_todo)
+    router.add_route(Method.GET, Routes.Todos.todos_id, HttpHandler.get_todo)
+    router.add_route(Method.DELETE, Routes.Todos.todos_id, HttpHandler.delete_todo)
+    router.add_route(Method.PATCH, Routes.Todos.todos_id, HttpHandler.update_todo)
 
     httpd = Server(server_address, HttpHandler, store, router)
 

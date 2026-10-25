@@ -1,4 +1,5 @@
 from error import ValidationError
+from http_method import Method
 from todo import Todo, TodoField
 
 
@@ -16,7 +17,7 @@ class SchemaValidator:
         return value.strip()
 
     @staticmethod
-    def _validate_data(method: str, data: dict):
+    def _validate_data(method: Method, data: dict):
         if not isinstance(data, dict):
             raise ValidationError("Expected JSON object")
 
@@ -61,7 +62,7 @@ class TodoCreateRequest(SchemaValidator):
 
     @classmethod
     def from_dict(cls, data: dict) -> TodoCreateRequest:
-        super()._validate_data("POST", data)
+        super()._validate_data(Method.POST, data)
         super()._validate_writable_fields(Todo.CREATE_FIELDS, data)
 
         name = super()._required_string(data, TodoField.NAME)
@@ -76,7 +77,7 @@ class TodoCreateRequest(SchemaValidator):
 class TodoUpdateRequest(SchemaValidator):
     @classmethod
     def from_dict(cls, data: dict) -> dict:
-        super()._validate_data("PATCH", data)
+        super()._validate_data(Method.PATCH, data)
 
         if TodoField.ID in data:
             raise ValidationError("ID Field Cannot Be Modified")
@@ -85,11 +86,22 @@ class TodoUpdateRequest(SchemaValidator):
 
         updated = {}
         for key, value in data.items():
-            expected_type = Todo.WRITABLE_FIELDS[key]
+            if key == TodoField.DESCRIPTION:
+                if value is None:
+                    updated[key] = None
+                    continue
 
-            if value is None and key == TodoField.DESCRIPTION:
-                updated[key] = None
+                if not isinstance(value, str):
+                    raise ValidationError(f"Invalid Type For '{key}'")
+
+                value = value.strip()
+                if not value:
+                    raise ValidationError(f"'{key}' Must Be A Non-Empty String")
+
+                updated[key] = value
                 continue
+
+            expected_type = Todo.WRITABLE_FIELDS[key]
 
             if type(value) is not expected_type:
                 raise ValidationError(f"Invalid Type For '{key}'")

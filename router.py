@@ -1,17 +1,26 @@
-import unittest
 from collections.abc import Callable
+from enum import StrEnum
+from http import HTTPStatus
 from urllib.parse import parse_qs, urlsplit
 
-from todo import TodoField
+
+class Routes:
+    class Todos(StrEnum):
+        todos = "/todos"
+        todos_id = f"{todos}/:id"
+
+        @classmethod
+        def with_id(cls, todo_id: str) -> str:
+            return cls.todos_id.replace(":id", todo_id)
 
 
 class Route:
-    def __init__(self, method: str, path_str: str, action: Callable | None):
+    def __init__(self, method: str, path_str: Routes.Todos, action: Callable | None):
         self.method = method
         self.path_str = path_str
         self.action = action
 
-    def __str__(self) -> str:
+    def __str__(self) -> Routes.Todos:
         return self.path_str
 
     def to_dict(self) -> dict:
@@ -22,7 +31,7 @@ class Router:
     def __init__(self):
         self.__routes: list[Route] = []
 
-    def add_route(self, method: str, path_str: str, action: Callable) -> None:
+    def add_route(self, method: str, path_str: Routes.Todos, action: Callable) -> None:
         self.__routes.append(Route(method.upper(), path_str, action))
 
     def resolve(
@@ -56,13 +65,11 @@ class Router:
                 path_matches.append((route, params))
 
         if not path_matches:
-            return None, {}, query, 404, []
+            return None, {}, query, HTTPStatus.NOT_FOUND, []
 
         for route, params in path_matches:
             if route.method == method:
-                return route, params, query, 200, []
+                return route, params, query, HTTPStatus.OK, []
 
         allowed_methods = sorted({route.method for route, _ in path_matches})
-        return None, {}, query, 405, allowed_methods
-
-
+        return None, {}, query, HTTPStatus.METHOD_NOT_ALLOWED, allowed_methods

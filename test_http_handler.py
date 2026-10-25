@@ -1,14 +1,25 @@
 import json
+import socket
 import tempfile
 import unittest
+from http import HTTPStatus
 from http.client import HTTPConnection
 from pathlib import Path
 from threading import Thread
 from typing import Any
 
 from database import Database
-from http_handler import HttpHandler
-from router import Router
+from error import (
+    InvalidJsonError,
+    MethodNotAllowedError,
+    NotFoundError,
+    PayloadTooLargeError,
+    TodoNotFoundError,
+    ValidationError,
+)
+from http_handler import MAX_REQUEST_BODY_SIZE, HttpHandler
+from http_method import Method
+from router import Router, Routes
 from server import Server
 from todo import TodoField
 from todo_store import TodoStore
@@ -31,11 +42,11 @@ class HttpHandlerTest(unittest.TestCase):
         )
 
         router = Router()
-        router.add_route("GET", "/todos", HttpHandler.get_todos)
-        router.add_route("POST", "/todos", HttpHandler.create_todo)
-        router.add_route("GET", "/todos/:id", HttpHandler.get_todo)
-        router.add_route("DELETE", "/todos/:id", HttpHandler.delete_todo)
-        router.add_route("PATCH", "/todos/:id", HttpHandler.update_todo)
+        router.add_route(Method.GET, Routes.Todos.todos, HttpHandler.get_todos)
+        router.add_route(Method.POST, Routes.Todos.todos, HttpHandler.create_todo)
+        router.add_route(Method.GET, Routes.Todos.todos_id, HttpHandler.get_todo)
+        router.add_route(Method.DELETE, Routes.Todos.todos_id, HttpHandler.delete_todo)
+        router.add_route(Method.PATCH, Routes.Todos.todos_id, HttpHandler.update_todo)
 
         self.server = Server(
             ("127.0.0.1", 0),
@@ -86,56 +97,74 @@ class HttpHandlerTest(unittest.TestCase):
         )
 
     def test_get_todos_returns_200(self) -> None:
-        response, data = self.request("GET", "/todos")
+        response, data = self.request(Method.GET, Routes.Todos.todos)
 
-        self.assertEqual(200, response.status)
+        self.assertEqual(HTTPStatus.OK, response.status)
         self.assertEqual("application/json", response.getheader("Content-Type"))
         self.assertEqual(4, len(data))
 
     def test_unknown_path_returns_404(self) -> None:
-        response, data = self.request("GET", "/unknown")
+        response, data = self.request(Method.GET, "/unknown")
 
-        self.assert_error(response, data, 404, "not_found", "Not Found")
+        self.assert_error(
+            response,
+            data,
+            HTTPStatus.NOT_FOUND,
+            NotFoundError.ERROR.code,
+            NotFoundError.ERROR.message,
+        )
 
     def test_unsupported_method_returns_405(self) -> None:
-        response, data = self.request("DELETE", "/todos")
+        response, data = self.request(Method.DELETE, Routes.Todos.todos)
 
-        self.assert_error(response, data, 405, "method_not_allowed", "Method Not Allowed")
-        self.assertEqual("GET, POST", response.getheader("Allow"))
+        self.assert_error(
+            response,
+            data,
+            HTTPStatus.METHOD_NOT_ALLOWED,
+            MethodNotAllowedError.ERROR.code,
+            MethodNotAllowedError.ERROR.message,
+        )
+        self.assertEqual(f"{Method.GET}, {Method.POST}", response.getheader("Allow"))
 
     def test_nonexistent_todo_returns_404(self) -> None:
-        response, data = self.request("GET", "/todos/non-existent")
+        response, data = self.request(Method.GET, Routes.Todos.with_id("non-existent"))
 
-        self.assert_error(response, data, 404, "item_not_found", "Item Not Found")
+        self.assert_error(
+            response,
+            data,
+            HTTPStatus.NOT_FOUND,
+            TodoNotFoundError.ERROR.code,
+            TodoNotFoundError.ERROR.message,
+        )
 
     def test_create_requires_name(self) -> None:
         response, data = self.request(
-            "POST",
-            "/todos",
+            Method.POST,
+            Routes.Todos.todos,
             {TodoField.DESCRIPTION: "Read a book"},
         )
 
         self.assert_error(
             response,
             data,
-            400,
-            "validation_error",
+            HTTPStatus.BAD_REQUEST,
+            ValidationError.ERROR.code,
             "Field 'name' Is Required",
         )
 
     def test_create_todo_returns_201(self) -> None:
         response, data = self.request(
-            "POST",
-            "/todos",
+            Method.POST,
+            Routes.Todos.todos,
             {
                 TodoField.NAME: "eat breakfast",
                 TodoField.DESCRIPTION: "After learning some python ofcourse",
             },
         )
 
-        self.assertEqual(201, response.status)
+        self.assertEqual(HTTPStatus.CREATED, response.status)
         self.assertEqual(
-            f"/todos/{data[TodoField.ID]}",
+            Routes.Todos.with_id(data[TodoField.ID]),
             response.getheader("Location"),
         )
         self.assertEqual(
@@ -150,27 +179,27 @@ class HttpHandlerTest(unittest.TestCase):
 
     def test_patch_rejects_id_field(self) -> None:
         response, data = self.request(
-            "PATCH",
-            f"/todos/{self.todo.uuid}",
+            Method.PATCH,
+            Routes.Todos.with_id(self.todo.uuid),
             {TodoField.ID: "1234", TodoField.NAME: "changed"},
         )
 
         self.assert_error(
             response,
             data,
-            400,
-            "validation_error",
+            HTTPStatus.BAD_REQUEST,
+            ValidationError.ERROR.code,
             "ID Field Cannot Be Modified",
         )
 
     def test_patch_accepts_partial_data(self) -> None:
         response, data = self.request(
-            "PATCH",
-            f"/todos/{self.todo.uuid}",
+            Method.PATCH,
+            Routes.Todos.with_id(self.todo.uuid),
             {TodoField.IS_DONE: True},
         )
 
-        self.assertEqual(200, response.status)
+        self.assertEqual(HTTPStatus.OK, response.status)
         self.assertEqual(
             {**self.todo.to_dict(), TodoField.IS_DONE: True},
             data,
@@ -178,8 +207,12 @@ class HttpHandlerTest(unittest.TestCase):
 
     def test_create_and_patch_reject_unknown_fields(self) -> None:
         cases = [
-            ("POST", "/todos", {TodoField.NAME: "valid", "something": "else"}),
-            ("PATCH", f"/todos/{self.todo.uuid}", {"something": "else"}),
+            (
+                Method.POST,
+                Routes.Todos.todos,
+                {TodoField.NAME: "valid", "something": "else"},
+            ),
+            (Method.PATCH, Routes.Todos.with_id(self.todo.uuid), {"something": "else"}),
         ]
 
         for method, path, body in cases:
@@ -188,21 +221,31 @@ class HttpHandlerTest(unittest.TestCase):
                 self.assert_error(
                     response,
                     data,
-                    400,
-                    "validation_error",
+                    HTTPStatus.BAD_REQUEST,
+                    ValidationError.ERROR.code,
                     "Unknown Field 'something'",
                 )
 
     def test_create_and_patch_reject_empty_body(self) -> None:
         cases = [
-            ("POST", "/todos", "POST Body Must Not Be Empty"),
-            ("PATCH", f"/todos/{self.todo.uuid}", "PATCH Body Must Not Be Empty"),
+            (Method.POST, Routes.Todos.todos, "POST Body Must Not Be Empty"),
+            (
+                Method.PATCH,
+                Routes.Todos.with_id(self.todo.uuid),
+                "PATCH Body Must Not Be Empty",
+            ),
         ]
 
         for method, path, message in cases:
             with self.subTest(method=method):
                 response, data = self.request(method, path, {})
-                self.assert_error(response, data, 400, "validation_error", message)
+                self.assert_error(
+                    response,
+                    data,
+                    HTTPStatus.BAD_REQUEST,
+                    ValidationError.ERROR.code,
+                    message,
+                )
 
     def test_filter_todos_by_completion_status(self) -> None:
         cases = [
@@ -213,10 +256,14 @@ class HttpHandlerTest(unittest.TestCase):
 
         for value, expected_names in cases:
             with self.subTest(is_done=value):
-                path = "/todos" if value is None else f"/todos?is_done={value}"
-                response, data = self.request("GET", path)
+                path = (
+                    Routes.Todos.todos
+                    if value is None
+                    else Routes.Todos.todos + f"?is_done={value}"
+                )
+                response, data = self.request(Method.GET, path)
 
-                self.assertEqual(200, response.status)
+                self.assertEqual(HTTPStatus.OK, response.status)
                 self.assertEqual(
                     expected_names,
                     [todo[TodoField.NAME] for todo in data],
@@ -229,23 +276,65 @@ class HttpHandlerTest(unittest.TestCase):
                     )
 
     def test_invalid_completion_filter_returns_400(self) -> None:
-        response, data = self.request("GET", "/todos?is_done=invalid")
+        response, data = self.request(Method.GET, Routes.Todos.todos + "?is_done=invalid")
 
         self.assert_error(
             response,
             data,
-            400,
-            "validation_error",
+            HTTPStatus.BAD_REQUEST,
+            ValidationError.ERROR.code,
             f"'{TodoField.IS_DONE}' Must Be 'true' or 'false'",
         )
 
     def test_patch_can_clear_description(self) -> None:
         response, data = self.request(
-            "PATCH",
-            f"/todos/{self.todo.uuid}",
+            Method.PATCH,
+            Routes.Todos.with_id(self.todo.uuid),
             {TodoField.DESCRIPTION: None},
         )
 
-        self.assertEqual(200, response.status)
+        self.assertEqual(HTTPStatus.OK, response.status)
         self.assertIsNone(data[TodoField.DESCRIPTION])
         self.assertEqual("read a book", data[TodoField.NAME])
+
+    def test_invalid_utf8_returns_400(self) -> None:
+        response, data = self.request(Method.POST, Routes.Todos.todos, b"\xff")
+        self.assert_error(
+            response,
+            data,
+            HTTPStatus.BAD_REQUEST,
+            InvalidJsonError.ERROR.code,
+            InvalidJsonError.ERROR.message,
+        )
+
+    def test_oversized_request_returns_413(self) -> None:
+        with socket.create_connection(self.server.server_address) as sock:
+            request = (
+                f"{Method.POST} {Routes.Todos.todos} HTTP/1.1\r\n"
+                f"Host: localhost\r\n"
+                f"Content-Length: {MAX_REQUEST_BODY_SIZE + 1}\r\n"
+                "Connection: close\r\n"
+                "\r\n"
+            )
+            sock.sendall(request.encode("ascii"))
+
+            chunks = []
+            while chunk := sock.recv(4096):
+                chunks.append(chunk)
+
+            response = b"".join(chunks).decode("latin-1")
+
+        self.assertIn(str(HTTPStatus.REQUEST_ENTITY_TOO_LARGE), response)
+        self.assertIn(PayloadTooLargeError.ERROR.code, response)
+        self.assertIn(PayloadTooLargeError.ERROR.message, response)
+
+    def test_patch_updates_description(self) -> None:
+        response, data = self.request(
+            Method.PATCH,
+            Routes.Todos.with_id(self.todo.uuid),
+            {TodoField.DESCRIPTION: "Updated description"},
+        )
+        print("data: ", data)
+
+        self.assertEqual(HTTPStatus.OK, response.status)
+        self.assertEqual("Updated description", data[TodoField.DESCRIPTION])

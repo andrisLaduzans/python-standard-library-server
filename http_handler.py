@@ -1,14 +1,29 @@
 import json
 import logging
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 
-from error import InvalidRequestError, TodoNotFoundError, ValidationError
+from error import (
+    AppError,
+    ErrorCode,
+    InternalError,
+    InvalidJsonError,
+    InvalidRequestError,
+    MethodNotAllowedError,
+    NotFoundError,
+    PayloadTooLargeError,
+    TodoNotFoundError,
+    ValidationError,
+)
+from http_method import Method
+from router import Routes
 from server import Server
 from todo import TodoField
 from todo_schemas import TodoCreateRequest, TodoListQuery, TodoUpdateRequest
 from todo_service import TodoService
 
 logger = logging.getLogger(__name__)
+MAX_REQUEST_BODY_SIZE = 1024 * 1024  # 1MiB
 
 
 class HttpHandler(BaseHTTPRequestHandler):
@@ -43,6 +58,9 @@ class HttpHandler(BaseHTTPRequestHandler):
         if content_length <= 0:
             raise InvalidRequestError
 
+        if content_length > MAX_REQUEST_BODY_SIZE:
+            raise PayloadTooLargeError
+
         body = self.rfile.read(content_length)
         data = json.loads(body)
         return data
@@ -53,84 +71,91 @@ class HttpHandler(BaseHTTPRequestHandler):
                 method, self.path
             )
 
-            if status == 405:
+            if status == HTTPStatus.METHOD_NOT_ALLOWED:
                 self.__error_response(
-                    405,
-                    "method_not_allowed",
-                    "Method Not Allowed",
+                    HTTPStatus.METHOD_NOT_ALLOWED,
+                    MethodNotAllowedError.ERROR,
                     {"Allow": ", ".join(allowed_methods)},
                 )
                 return
 
-            if status == 404 or not route:
-                self.__error_response(404, "not_found", "Not Found")
+            if status == HTTPStatus.NOT_FOUND or not route:
+                self.__error_response(HTTPStatus.NOT_FOUND, NotFoundError.ERROR)
                 return
 
             route.action(self, params, query)
 
-        except TodoNotFoundError:
-            self.__error_response(404, "item_not_found", "Item Not Found")
+        except TodoNotFoundError as error:
+            self.__error_response(HTTPStatus.NOT_FOUND, error)
             return
-        except ValidationError as error:
-            self.__error_response(400, "validation_error", str(error))
+        except (ValidationError, InvalidRequestError) as error:
+            self.__error_response(HTTPStatus.BAD_REQUEST, error)
             return
-        except InvalidRequestError:
-            self.__error_response(400, "invalid_request", "Invalid Request")
+        except PayloadTooLargeError as error:
+            self.__error_response(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, error)
             return
-        except json.JSONDecodeError:
-            self.__error_response(400, "invalid_json", "Invalid JSON")
+        except json.JSONDecodeError, UnicodeDecodeError:
+            self.__error_response(HTTPStatus.BAD_REQUEST, InvalidJsonError.ERROR)
             return
         except Exception:
             logger.exception("Unexpected error while handling request")
-            self.__error_response(500, "internal_error", "Internal Server Error")
+            self.__error_response(HTTPStatus.INTERNAL_SERVER_ERROR, InternalError.ERROR)
 
     def do_GET(self):
-        self.__dispatch("GET")
+        self.__dispatch(Method.GET)
 
     def do_POST(self):
-        self.__dispatch("POST")
+        self.__dispatch(Method.POST)
 
     def do_DELETE(self):
-        self.__dispatch("DELETE")
+        self.__dispatch(Method.DELETE)
 
     def do_PATCH(self):
-        self.__dispatch("PATCH")
+        self.__dispatch(Method.PATCH)
 
     def get_todos(self, params=None, query=None):
         query_params = TodoListQuery.from_query_params(query)
         todos = self.service.get_all(is_done=query_params.is_done)
-        self.__response(200, todos)
+        self.__response(HTTPStatus.OK, todos)
 
     def get_todo(self, params: dict, query=None):
         todo = self.service.get(params[TodoField.ID])
-        self.__response(200, todo)
+        self.__response(HTTPStatus.OK, todo)
 
     def delete_todo(self, params: dict, query=None):
         todo = self.service.delete(params[TodoField.ID])
-        self.__response(200, todo)
+        self.__response(HTTPStatus.OK, todo)
 
     def create_todo(self, params=None, query=None):
         data = self.__parse_request()
         request = TodoCreateRequest.from_dict(data)
         todo = self.service.create(request.name, request.description)
-        self.__response(201, todo, {"Location": f"/todos/{todo['id']}"})
+        self.__response(
+            HTTPStatus.CREATED, todo, {"Location": Routes.Todos.with_id(todo["id"])}
+        )
 
     def update_todo(self, params: dict, _):
         data = self.__parse_request()
         request = TodoUpdateRequest.from_dict(data)
         todo = self.service.update_todo(params[TodoField.ID], request)
-        self.__response(200, todo)
+        self.__response(HTTPStatus.OK, todo)
 
     def send_error(
         self, code: int, message: str | None = None, explain: str | None = None
     ) -> None:
         self.__error_response(
             code,
-            "unknown_error",
-            message or self.responses.get(code, ("Unknown Error",))[0],
+            AppError(
+                ErrorCode(
+                    "unknown_error",
+                    message or self.responses.get(code, ("Unknown Error",))[0],
+                ),
+            ),
         )
 
     def __error_response(
-        self, status: int, code: str, message: str, headers: dict[str, str] | None = None
+        self, status: int, error: AppError, headers: dict[str, str] | None = None
     ) -> None:
-        self.__response(status, {"error": {"code": code, "message": message}}, headers)
+        self.__response(
+            status, {"error": {"code": error.code, "message": error.message}}, headers
+        )

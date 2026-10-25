@@ -71,14 +71,6 @@ Format Python files
 python -m ruff format .
 ````
 
-## Testing
-
-Run all tests from the project root:
-
-```bash
-python -m unittest -v
-```
-
 ## Configuration
 
 Create a `.env` file in the project root:
@@ -118,7 +110,7 @@ Stop the server with `Ctrl+C`.
 Run the HTTP handler tests:
 
 ```bash
-python -m unittest http_handler_test
+python -m unittest -v
 ```
 
 ## Git ignore
