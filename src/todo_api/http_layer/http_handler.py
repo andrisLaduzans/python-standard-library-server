@@ -3,7 +3,7 @@ import logging
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 
-from error import (
+from todo_api.error import (
     AppError,
     ErrorCode,
     InternalError,
@@ -15,12 +15,16 @@ from error import (
     TodoNotFoundError,
     ValidationError,
 )
-from http_method import Method
-from router import Routes
-from server import Server
-from todo import TodoField
-from todo_schemas import TodoCreateRequest, TodoListQuery, TodoUpdateRequest
-from todo_service import TodoService
+from todo_api.http_layer.http_method import Method
+from todo_api.http_layer.router import Routes
+from todo_api.http_layer.server import Server
+from todo_api.todos.todo import TodoField
+from todo_api.todos.todo_schemas import (
+    TodoCreateRequest,
+    TodoListQuery,
+    TodoUpdateRequest,
+)
+from todo_api.todos.todo_service import TodoService
 
 logger = logging.getLogger(__name__)
 MAX_REQUEST_BODY_SIZE = 1024 * 1024  # 1MiB
@@ -31,12 +35,18 @@ class HttpHandler(BaseHTTPRequestHandler):
         self.store = server.store
         self.service = TodoService(self.store)
         self.router = server.router
+        self.response_status = None
+        dispatch = self.__dispatch
+        for middleware_class in reversed(server.middlewares):
+            dispatch = middleware_class(self, dispatch)
+        self._dispatch = dispatch
 
         super().__init__(request, client_address, server)
 
     def __response(
         self, status: int, data: dict | list, headers: dict[str, str] | None = None
     ):
+        self.response_status = status
         body = json.dumps(data).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -102,16 +112,16 @@ class HttpHandler(BaseHTTPRequestHandler):
             self.__error_response(HTTPStatus.INTERNAL_SERVER_ERROR, InternalError.ERROR)
 
     def do_GET(self):
-        self.__dispatch(Method.GET)
+        self._dispatch(Method.GET)
 
     def do_POST(self):
-        self.__dispatch(Method.POST)
+        self._dispatch(Method.POST)
 
     def do_DELETE(self):
-        self.__dispatch(Method.DELETE)
+        self._dispatch(Method.DELETE)
 
     def do_PATCH(self):
-        self.__dispatch(Method.PATCH)
+        self._dispatch(Method.PATCH)
 
     def get_todos(self, params=None, query=None):
         query_params = TodoListQuery.from_query_params(query)
@@ -121,6 +131,7 @@ class HttpHandler(BaseHTTPRequestHandler):
             offset=query_params.offset,
             sort_by=query_params.sort_by,
             sort_order=query_params.sort_order,
+            search=query_params.search,
         )
         self.__response(HTTPStatus.OK, todos)
 

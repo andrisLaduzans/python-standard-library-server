@@ -1,20 +1,24 @@
+import logging
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-from database import Database
-from http_handler import HttpHandler
-from http_method import Method
-from router import Router, Routes
-from server import Server
-from todo_store import TodoStore
+from todo_api.db.database import Database
+from todo_api.db.todo_store import TodoStore
+from todo_api.http_layer.http_handler import HttpHandler
+from todo_api.http_layer.http_method import Method
+from todo_api.http_layer.middleware import RequestLoggingMiddleware
+from todo_api.http_layer.router import Router, Routes
+from todo_api.http_layer.server import Server
 
 load_dotenv()
 PORT = 8000
 
 
 def serve():
+    logging.basicConfig(level=logging.INFO)
+
     server_address = ("", PORT)
 
     fallback_db_path = Path(__file__).resolve().parent / "todos.db"
@@ -32,7 +36,9 @@ def serve():
     router.add_route(Method.DELETE, Routes.Todos.todos_id, HttpHandler.delete_todo)
     router.add_route(Method.PATCH, Routes.Todos.todos_id, HttpHandler.update_todo)
 
-    httpd = Server(server_address, HttpHandler, store, router)
+    httpd = Server(
+        server_address, HttpHandler, store, router, (RequestLoggingMiddleware,)
+    )
 
     print(f"server running at http://localhost:{PORT}")
     httpd.serve_forever()

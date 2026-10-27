@@ -1,3 +1,21 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "todo-api"
+version = "0.1.0"
+description = "Todo API backend"
+requires-python = ">=3.11"
+dependencies = ["python-dotenv==1.2.4"]
+
+[project.scripts]
+todo-api = "todo_api.main:serve"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["todo_api*"]
+
 [tool.ruff]
 line-length = 90
 target-version = "py314"

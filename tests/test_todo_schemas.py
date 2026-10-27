@@ -1,9 +1,9 @@
 import unittest
 from urllib.parse import parse_qs
 
-from error import ValidationError
-from todo import TodoField
-from todo_schemas import SortOrder, TodoListQuery, TodoSortBy
+from todo_api.error import ValidationError
+from todo_api.todos.todo import TodoField
+from todo_api.todos.todo_schemas import SortOrder, TodoListQuery, TodoSortBy
 
 
 class TodoListQueryTest(unittest.TestCase):
@@ -14,6 +14,7 @@ class TodoListQueryTest(unittest.TestCase):
             "offset": 0,
             "sort_by": TodoSortBy.ID,
             "sort_order": SortOrder.ASC,
+            "search": None,
         }
 
     def test_query_params(self):
@@ -106,4 +107,30 @@ class TodoListQueryTest(unittest.TestCase):
                     f"Expected One Of {[item.value for item in TodoSortBy]}"
                 ),
                 ctx.exception.message,
+            )
+
+    def test_query_params_search(self):
+        with self.subTest("Should throw if search param present with empty value"):
+            parsed_qs = parse_qs("search=  &something_else=else")
+            with self.assertRaises(ValidationError):
+                TodoListQuery.from_query_params(parsed_qs)
+
+        with self.subTest("Should join if multiple search params present"):
+            parsed_qs = parse_qs("search=I like&search=coca cola")
+            result = TodoListQuery.from_query_params(parsed_qs)
+            self.assertEqual(
+                {**self.default_parsed_qs, "search": ["I like", "coca cola"]},
+                result.to_dict(),
+            )
+
+        with self.subTest("Should throw if search longer than 224 chars"):
+            parsed_qs = parse_qs(f"search={'x' * (TodoListQuery.MAX_SEARCH_LIMIT + 1)}")
+            with self.assertRaises(ValidationError):
+                TodoListQuery.from_query_params(parsed_qs)
+
+        with self.subTest("Should not parse 0 as falsy value"):
+            parsed_qs = parse_qs("search=0")
+            result = TodoListQuery.from_query_params(parsed_qs)
+            self.assertEqual(
+                {**self.default_parsed_qs, "search": ["0"]}, result.to_dict()
             )

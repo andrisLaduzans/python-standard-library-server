@@ -8,8 +8,9 @@ from pathlib import Path
 from threading import Thread
 from typing import Any
 
-from database import Database
-from error import (
+from todo_api.db.database import Database
+from todo_api.db.todo_store import TodoStore
+from todo_api.error import (
     InvalidJsonError,
     MethodNotAllowedError,
     NotFoundError,
@@ -17,12 +18,12 @@ from error import (
     TodoNotFoundError,
     ValidationError,
 )
-from http_handler import MAX_REQUEST_BODY_SIZE, HttpHandler
-from http_method import Method
-from router import Router, Routes
-from server import Server
-from todo import TodoField
-from todo_store import TodoStore
+from todo_api.http_layer.http_handler import MAX_REQUEST_BODY_SIZE, HttpHandler
+from todo_api.http_layer.http_method import Method
+from todo_api.http_layer.middleware import RequestLoggingMiddleware
+from todo_api.http_layer.router import Router, Routes
+from todo_api.http_layer.server import Server
+from todo_api.todos.todo import TodoField
 
 
 class HttpHandlerTest(unittest.TestCase):
@@ -54,6 +55,7 @@ class HttpHandlerTest(unittest.TestCase):
             HttpHandler,
             store=self.store,
             router=router,
+            middlewares=(RequestLoggingMiddleware,),
         )
         self.thread = Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -332,3 +334,47 @@ class HttpHandlerTest(unittest.TestCase):
             result = [item[TodoField.NAME] for item in data]
 
             self.assertEqual(expected, result)
+
+    def test_search_todos(self):
+        with self.subTest("Should be able to search todo with search param"):
+            response, data = self.request(Method.GET, Routes.Todos.todos + "?search=3")
+            self.assertEqual(HTTPStatus.OK, response.status)
+
+            expected = ["todo_3"]
+            actual = [item[TodoField.NAME] for item in data]
+            self.assertEqual(expected, actual)
+
+        with self.subTest("Should be able to combine search with is done filter"):
+            response, data = self.request(
+                Method.GET, Routes.Todos.todos + "?is_done=true&search=2&search=4"
+            )
+            self.assertEqual(HTTPStatus.OK, response.status)
+            self.assertEqual(
+                [
+                    {
+                        "name": "todo_2",
+                        "is_done": True,
+                    },
+                    {
+                        "name": "todo_4",
+                        "is_done": True,
+                    },
+                ],
+                [
+                    {
+                        TodoField.NAME: item[TodoField.NAME],
+                        TodoField.IS_DONE: item[TodoField.IS_DONE],
+                    }
+                    for item in data
+                ],
+            )
+
+    def test_request_logging_middleware_logs_request(self):
+        with self.assertLogs("todo_api.http_layer.middleware", level="INFO") as logs:
+            response, data = self.request(Method.GET, Routes.Todos.todos)
+
+            self.assertEqual(HTTPStatus.OK, response.status)
+            self.assertEqual(5, len(data))
+            self.assertIn(
+                "method=GET path=/todos status=200 duration_ms=", logs.output[0]
+            )

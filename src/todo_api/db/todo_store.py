@@ -1,8 +1,8 @@
 from contextlib import closing
 
-from database import Database
-from todo import Todo
-from todo_schemas import SortOrder, TodoListQuery, TodoSortBy
+from todo_api.db.database import Database
+from todo_api.todos.todo import Todo
+from todo_api.todos.todo_schemas import SortOrder, TodoListQuery, TodoSortBy
 
 
 class TodoStore:
@@ -34,25 +34,36 @@ class TodoStore:
     def read(
         self,
         is_done: bool | None = None,
-        limit: int = TodoListQuery().limit,
-        offset: int = TodoListQuery().offset,
-        sort_by: TodoSortBy = TodoSortBy.ID,
-        sort_order: SortOrder = TodoListQuery().sort_order,
+        limit: int = TodoListQuery.DEFAULT_LIMIT,
+        offset: int = TodoListQuery.DEFAULT_OFFSET,
+        sort_by: TodoSortBy = TodoListQuery.DEFAULT_SORT_BY,
+        sort_order: SortOrder = TodoListQuery.DEFAULT_SORT_ORDER,
+        search: list[str] | None = None,
     ) -> list[Todo]:
-        query = """
-            SELECT id, name, description, is_done
-            FROM todos
-            """
+        query = "\nSELECT id, name, description, is_done\nFROM todos"
 
+        conditions: list[str] = []
         params: list[int | str] = []
 
         if is_done is not None:
-            query += "WHERE is_done = ? "
-            params.append(int(is_done))
+            conditions.append("(is_done = ?)")
+            params.extend([int(is_done)])
 
-        query += f"ORDER BY {sort_by.value} {sort_order.upper()}, id ASC "
+        if search is not None and len(search):
+            search_conditions: list[str] = []
+            for search_str in search:
+                search_conditions.append("\n(name LIKE ? OR description LIKE ?)")
+                params.extend([f"%{search_str}%", f"%{search_str}%"])
 
-        query += "LIMIT ? OFFSET ?"
+            search_query = " (" + " OR ".join(search_conditions) + "\n) "
+            conditions.append(search_query)
+
+        if conditions:
+            query += "\nWHERE " + " AND ".join(conditions)
+
+        query += f"\nORDER BY {sort_by.value} {sort_order.upper()}, id ASC "
+
+        query += "\nLIMIT ? OFFSET ? "
         params.extend((limit, offset))
 
         with closing(self._database.connect()) as connection:
@@ -77,6 +88,8 @@ class TodoStore:
 
     def update_todo(self, uuid: str, args: dict) -> Todo | None:
         with closing(self._database.connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+
             with connection:
                 row = connection.execute(
                     """
@@ -106,6 +119,8 @@ class TodoStore:
 
     def delete(self, uuid: str) -> Todo | None:
         with closing(self._database.connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+
             with connection:
                 row = connection.execute(
                     """

@@ -1,6 +1,6 @@
-from error import TodoNotFoundError
-from todo_schemas import SortOrder, TodoSortBy
-from todo_store import TodoStore
+from todo_api.db.todo_store import TodoStore
+from todo_api.error import TodoNotFoundError
+from todo_api.todos.todo_schemas import SortOrder, TodoSortBy
 
 
 class TodoService:
@@ -14,8 +14,9 @@ class TodoService:
         offset: int,
         sort_by: TodoSortBy,
         sort_order: SortOrder,
+        search: list[str] | None,
     ) -> list[dict]:
-        todos = self._store.read(is_done, limit, offset, sort_by, sort_order)
+        todos = self._store.read(is_done, limit, offset, sort_by, sort_order, search)
         return [todo.to_dict() for todo in todos]
 
     def find_by_id(self, uuid: str) -> dict:

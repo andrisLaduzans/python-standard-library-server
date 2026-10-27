@@ -1,6 +1,5 @@
 import uuid
 from enum import StrEnum
-from typing import Literal
 
 
 class TodoField(StrEnum):
