@@ -16,6 +16,7 @@ from todo_api.error import (
     ValidationError,
 )
 from todo_api.http_layer.http_method import Method
+from todo_api.http_layer.http_response import HttpResponse
 from todo_api.http_layer.router import Routes
 from todo_api.http_layer.server import Server
 from todo_api.todos.todo import TodoField
@@ -43,21 +44,30 @@ class HttpHandler(BaseHTTPRequestHandler):
 
         super().__init__(request, client_address, server)
 
-    def __response(
+    def __create_response(
         self, status: int, data: dict | list, headers: dict[str, str] | None = None
-    ):
+    ) -> HttpResponse:
         self.response_status = status
-        body = json.dumps(data).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
+        return HttpResponse.json(status, data, headers or {})
 
-        if headers:
-            for keyword, value in headers.items():
-                self.send_header(keyword, value)
+    def __create_error_response(
+        self, status: int, error: AppError, headers: dict[str, str] | None = None
+    ):
+        response = self.__create_response(
+            status, {"error": {"code": error.code, "message": error.message}}, headers
+        )
+        return response
+
+    def __send_response(self, response: HttpResponse) -> None:
+        self.send_response(response.status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(response.body)))
+
+        for name, value in response.headers.items():
+            self.send_header(name, value)
 
         self.end_headers()
-        self.wfile.write(body)
+        self.wfile.write(response.body)
 
     def __parse_request(self) -> dict:
         try:
@@ -82,34 +92,38 @@ class HttpHandler(BaseHTTPRequestHandler):
             )
 
             if status == HTTPStatus.METHOD_NOT_ALLOWED:
-                self.__error_response(
+                response = self.__create_error_response(
                     HTTPStatus.METHOD_NOT_ALLOWED,
                     MethodNotAllowedError.ERROR,
                     {"Allow": ", ".join(allowed_methods)},
                 )
-                return
 
-            if status == HTTPStatus.NOT_FOUND or not route:
-                self.__error_response(HTTPStatus.NOT_FOUND, NotFoundError.ERROR)
-                return
-
-            route.action(self, params, query)
+            elif status == HTTPStatus.NOT_FOUND or not route:
+                response = self.__create_error_response(
+                    HTTPStatus.NOT_FOUND, NotFoundError.ERROR
+                )
+            else:
+                response = route.action(self, params, query)
 
         except TodoNotFoundError as error:
-            self.__error_response(HTTPStatus.NOT_FOUND, error)
-            return
+            response = self.__create_error_response(HTTPStatus.NOT_FOUND, error)
         except (ValidationError, InvalidRequestError) as error:
-            self.__error_response(HTTPStatus.BAD_REQUEST, error)
-            return
+            response = self.__create_error_response(HTTPStatus.BAD_REQUEST, error)
         except PayloadTooLargeError as error:
-            self.__error_response(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, error)
-            return
+            response = self.__create_error_response(
+                HTTPStatus.REQUEST_ENTITY_TOO_LARGE, error
+            )
         except json.JSONDecodeError, UnicodeDecodeError:
-            self.__error_response(HTTPStatus.BAD_REQUEST, InvalidJsonError.ERROR)
-            return
+            response = self.__create_error_response(
+                HTTPStatus.BAD_REQUEST, InvalidJsonError.ERROR
+            )
         except Exception:
             logger.exception("Unexpected error while handling request")
-            self.__error_response(HTTPStatus.INTERNAL_SERVER_ERROR, InternalError.ERROR)
+            response = self.__create_error_response(
+                HTTPStatus.INTERNAL_SERVER_ERROR, InternalError.ERROR
+            )
+
+        self.__send_response(response)
 
     def do_GET(self):
         self._dispatch(Method.GET)
@@ -133,46 +147,46 @@ class HttpHandler(BaseHTTPRequestHandler):
             sort_order=query_params.sort_order,
             search=query_params.search,
         )
-        self.__response(HTTPStatus.OK, todos)
+        response = self.__create_response(HTTPStatus.OK, todos)
+        return response
 
     def get_todo(self, params: dict, query=None):
         todo = self.service.find_by_id(params[TodoField.ID])
-        self.__response(HTTPStatus.OK, todo)
+        response = self.__create_response(HTTPStatus.OK, todo)
+        return response
 
     def delete_todo(self, params: dict, query=None):
         todo = self.service.delete(params[TodoField.ID])
-        self.__response(HTTPStatus.OK, todo)
+        response = self.__create_response(HTTPStatus.OK, todo)
+        return response
 
     def create_todo(self, params=None, query=None):
         data = self.__parse_request()
         request = TodoCreateRequest.from_dict(data)
         todo = self.service.create(request.name, request.description)
-        self.__response(
+        response = self.__create_response(
             HTTPStatus.CREATED, todo, {"Location": Routes.Todos.with_id(todo["id"])}
         )
+        return response
 
     def update_todo(self, params: dict, _):
         data = self.__parse_request()
         request = TodoUpdateRequest.from_dict(data)
         todo = self.service.update_todo(params[TodoField.ID], request)
-        self.__response(HTTPStatus.OK, todo)
+        response = self.__create_response(HTTPStatus.OK, todo)
+        return response
 
     def send_error(
         self, code: int, message: str | None = None, explain: str | None = None
     ) -> None:
-        self.__error_response(
+        error = AppError(
+            ErrorCode(
+                "unknown_error",
+                message or self.responses.get(code, ("Unknown Error",))[0],
+            )
+        )
+        response = self.__create_response(
             code,
-            AppError(
-                ErrorCode(
-                    "unknown_error",
-                    message or self.responses.get(code, ("Unknown Error",))[0],
-                ),
-            ),
+            {"error": {"code": error.code, "message": error.message}},
         )
-
-    def __error_response(
-        self, status: int, error: AppError, headers: dict[str, str] | None = None
-    ) -> None:
-        self.__response(
-            status, {"error": {"code": error.code, "message": error.message}}, headers
-        )
+        self.__send_response(response)

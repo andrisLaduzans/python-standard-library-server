@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass, field
 
 
@@ -7,11 +8,9 @@ class HttpResponse:
     body: bytes
     headers: dict[str, str] = field(default_factory=dict)
 
-"""
-same as
-class HttpResponse:
-    def __init__(self, status: int, body: bytes, headers: dict[str, str] | None = None):
-        self.status = status
-        self.body = body
-        self.headers = headers if headers is not None else {}
-"""
+    @classmethod
+    def json(
+        cls, status: int, data: dict | list, headers: dict[str, str] | None = None
+    ) -> HttpResponse:
+        body = json.dumps(data).encode("utf-8")
+        return cls(status, body, headers or {})
