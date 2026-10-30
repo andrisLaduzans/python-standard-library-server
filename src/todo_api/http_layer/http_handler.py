@@ -13,9 +13,11 @@ from todo_api.error import (
     NotFoundError,
     PayloadTooLargeError,
     TodoNotFoundError,
+    UnsupportedMediaTypeError,
     ValidationError,
 )
 from todo_api.http_layer.http_method import Method
+from todo_api.http_layer.http_request import HttpRequest
 from todo_api.http_layer.http_response import HttpResponse
 from todo_api.http_layer.router import Routes
 from todo_api.http_layer.server import Server
@@ -36,18 +38,17 @@ class HttpHandler(BaseHTTPRequestHandler):
         self.store = server.store
         self.service = TodoService(self.store)
         self.router = server.router
-        self.response_status = None
         dispatch = self.__dispatch
         for middleware_class in reversed(server.middlewares):
             dispatch = middleware_class(self, dispatch)
         self._dispatch = dispatch
+        self.http_request: HttpRequest
 
         super().__init__(request, client_address, server)
 
     def __create_response(
         self, status: int, data: dict | list, headers: dict[str, str] | None = None
     ) -> HttpResponse:
-        self.response_status = status
         return HttpResponse.json(status, data, headers or {})
 
     def __create_error_response(
@@ -71,7 +72,7 @@ class HttpHandler(BaseHTTPRequestHandler):
 
     def __parse_request(self) -> dict:
         try:
-            content_length = int(self.headers.get("Content-Length", "0"))
+            content_length = int(self.http_request.headers.get("Content-Length", "0"))
         except ValueError as error:
             raise InvalidRequestError from error
 
@@ -81,14 +82,21 @@ class HttpHandler(BaseHTTPRequestHandler):
         if content_length > MAX_REQUEST_BODY_SIZE:
             raise PayloadTooLargeError
 
+        content_type = self.http_request.headers.get("Content-Type", "")
+        if not content_type.startswith("application/json"):
+            raise UnsupportedMediaTypeError
+
         body = self.rfile.read(content_length)
-        data = json.loads(body)
+        self.http_request.body = body
+        data = self.http_request.json()
         return data
 
-    def __dispatch(self, method: str) -> None:
+    def __dispatch(self, method: str) -> HttpResponse:
+        self.http_request = HttpRequest(method, self.path, self.headers)
+
         try:
             route, params, query, status, allowed_methods = self.router.resolve(
-                method, self.path
+                self.http_request
             )
 
             if status == HTTPStatus.METHOD_NOT_ALLOWED:
@@ -117,25 +125,33 @@ class HttpHandler(BaseHTTPRequestHandler):
             response = self.__create_error_response(
                 HTTPStatus.BAD_REQUEST, InvalidJsonError.ERROR
             )
+        except UnsupportedMediaTypeError as error:
+            response = self.__create_error_response(
+                HTTPStatus.UNSUPPORTED_MEDIA_TYPE, error
+            )
         except Exception:
             logger.exception("Unexpected error while handling request")
             response = self.__create_error_response(
                 HTTPStatus.INTERNAL_SERVER_ERROR, InternalError.ERROR
             )
 
+        return response
+
+    def _handle_request(self, method: str) -> None:
+        response = self._dispatch(method)
         self.__send_response(response)
 
     def do_GET(self):
-        self._dispatch(Method.GET)
+        self._handle_request(Method.GET)
 
     def do_POST(self):
-        self._dispatch(Method.POST)
+        self._handle_request(Method.POST)
 
     def do_DELETE(self):
-        self._dispatch(Method.DELETE)
+        self._handle_request(Method.DELETE)
 
     def do_PATCH(self):
-        self._dispatch(Method.PATCH)
+        self._handle_request(Method.PATCH)
 
     def get_todos(self, params=None, query=None):
         query_params = TodoListQuery.from_query_params(query)

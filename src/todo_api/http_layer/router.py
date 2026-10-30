@@ -3,6 +3,8 @@ from enum import StrEnum
 from http import HTTPStatus
 from urllib.parse import parse_qs, urlsplit
 
+from todo_api.http_layer.http_request import HttpRequest
+
 
 class Routes:
     class Todos(StrEnum):
@@ -35,11 +37,11 @@ class Router:
         self.__routes.append(Route(method.upper(), path_str, action))
 
     def resolve(
-        self, method: str, url_str: str
+        self, http_request: HttpRequest
     ) -> tuple[Route | None, dict, dict, int, list[str]]:
-        url = urlsplit(url_str)
+        url = urlsplit(http_request.target)
         query = parse_qs(url.query)
-        method = method.upper()
+        method = http_request.method.upper()
 
         path_matches = []
 

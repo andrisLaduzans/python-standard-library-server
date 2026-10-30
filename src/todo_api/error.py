@@ -69,3 +69,10 @@ class PayloadTooLargeError(AppError):
 
     def __init__(self, message: str | None = None):
         super().__init__(self.ERROR, message)
+
+
+class UnsupportedMediaTypeError(AppError):
+    ERROR = ErrorCode("unsupported_media_type", "Unsupported Media Type Header")
+
+    def __init__(self, message: str | None = None):
+        super().__init__(self.ERROR, message)

@@ -75,11 +75,15 @@ class HttpHandlerTest(unittest.TestCase):
         method: str,
         path: str,
         body: dict[str, Any] | bytes | None = None,
+        headers: dict[str, str] | None = None,
     ):
         if isinstance(body, dict):
             body = json.dumps(body).encode("utf-8")
 
-        self.connection.request(method, path, body)
+        self.connection.request(
+            method, path, body, headers or {"Content-Type": "application/json"}
+        )
+
         response = self.connection.getresponse()
         raw_body = response.read()
         return response, json.loads(raw_body) if raw_body else None
@@ -141,6 +145,7 @@ class HttpHandlerTest(unittest.TestCase):
             Method.POST,
             Routes.Todos.todos,
             {TodoField.DESCRIPTION: "Read a book"},
+            {"Content-Type": "application/json"},
         )
         self.assert_error(
             response,
@@ -217,17 +222,28 @@ class HttpHandlerTest(unittest.TestCase):
 
     def test_create_and_patch_reject_empty_body(self) -> None:
         cases = [
-            (Method.POST, Routes.Todos.todos, "POST Body Must Not Be Empty"),
+            (
+                Method.POST,
+                Routes.Todos.todos,
+                "POST Body Must Not Be Empty",
+                {"Content-Type": "application/json"},
+            ),
             (
                 Method.PATCH,
                 Routes.Todos.with_id(self.todo.uuid),
                 "PATCH Body Must Not Be Empty",
+                {"Content-Type": "application/json"},
             ),
         ]
 
-        for method, path, message in cases:
+        for method, path, message, header in cases:
             with self.subTest(method=method):
-                response, data = self.request(method, path, {})
+                response, data = self.request(
+                    method,
+                    path,
+                    {},
+                    header,
+                )
                 self.assert_error(
                     response,
                     data,
@@ -378,3 +394,20 @@ class HttpHandlerTest(unittest.TestCase):
             self.assertIn(
                 "method=GET path=/todos status=200 duration_ms=", logs.output[0]
             )
+
+    def test_request_logging_middleware_logs_not_found_response(self):
+        with self.assertLogs("todo_api.http_layer.middleware", level="INFO") as logs:
+            response, _ = self.request(Method.GET, "/unknown")
+
+        self.assertEqual(HTTPStatus.NOT_FOUND, response.status)
+        self.assertIn("status=404", logs.output[0])
+
+    def test_unsupported_content_type_returns_415(self):
+        body = {
+            TodoField.NAME: "eat breakfast",
+            TodoField.DESCRIPTION: "valid json, wrong content type",
+        }
+        response, data = self.request(
+            Method.POST, Routes.Todos.todos, body, headers={"Content-Type": "text/plain"}
+        )
+        self.assertEqual(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, response.status)

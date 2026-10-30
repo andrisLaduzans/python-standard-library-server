@@ -2,6 +2,7 @@ import unittest
 from http import HTTPStatus
 
 from todo_api.http_layer.http_method import Method
+from todo_api.http_layer.http_request import HttpRequest
 from todo_api.http_layer.router import Router, Routes
 from todo_api.todos.todo import TodoField
 
@@ -13,14 +14,16 @@ class TestRouter(unittest.TestCase):
         self.router.add_route(Method.GET, Routes.Todos.todos_id, lambda: None)
 
     def test_resolve_returns_matching_route(self):
-        route, *_ = self.router.resolve(Method.GET, Routes.Todos.todos)
+        route, *_ = self.router.resolve(HttpRequest(Method.GET, Routes.Todos.todos))
         self.assertIsNotNone(route)
         self.assertEqual(
             {"method": Method.GET, "path": Routes.Todos.todos}, route.to_dict()
         )
 
     def test_resolve_extracts_todo_id(self):
-        route, params, *_ = self.router.resolve(Method.GET, Routes.Todos.with_id("1234"))
+        route, params, *_ = self.router.resolve(
+            HttpRequest(Method.GET, Routes.Todos.with_id("1234"))
+        )
         self.assertIsNotNone(route)
         self.assertEqual(
             {"method": Method.GET, "path": Routes.Todos.todos_id}, route.to_dict()
@@ -30,13 +33,15 @@ class TestRouter(unittest.TestCase):
     def test_unknown_path(self):
         for path in ["/user", "/unknown", Routes.Todos.with_id("1234/extra")]:
             with self.subTest(path=path):
-                route, _, _, status, _ = self.router.resolve(Method.GET, path)
+                route, _, _, status, _ = self.router.resolve(
+                    HttpRequest(Method.GET, path)
+                )
                 self.assertIsNone(route)
                 self.assertEqual(404, status)
 
     def test_unsupported_method(self):
         route, _, _, status, allowed = self.router.resolve(
-            Method.POST, Routes.Todos.with_id("1234")
+            HttpRequest(Method.POST, Routes.Todos.with_id("1234"))
         )
         self.assertIsNone(route)
         self.assertEqual(HTTPStatus.METHOD_NOT_ALLOWED, status)
@@ -44,8 +49,10 @@ class TestRouter(unittest.TestCase):
 
     def test_query_params(self):
         route, _, query, *_ = self.router.resolve(
-            Method.GET,
-            Routes.Todos.todos + "?page=2&sort=name&campaign=test&campaign=lala",
+            HttpRequest(
+                Method.GET,
+                Routes.Todos.todos + "?page=2&sort=name&campaign=test&campaign=lala",
+            )
         )
         self.assertIsNotNone(route)
         self.assertEqual(
