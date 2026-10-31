@@ -94,7 +94,7 @@ source .venv/bin/activate
 Start the server:
 
 ```bash
-python main.py
+python -m todo_api.main
 ```
 
 The API will be available at:
@@ -104,6 +104,26 @@ http://localhost:8000
 ```
 
 Stop the server with `Ctrl+C`.
+
+## Authentication
+
+All `/todos` routes require a Bearer token. Requests without a valid token return `401 Unauthorized`.
+
+Create a token for a user:
+
+```bash
+python -m todo_api.create_token <user_id>
+```
+
+The token is printed once. Only its hash is stored, so save it somewhere safe.
+
+Send it with each request:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://localhost:8000/todos
+```
+
+Tokens are stored in the database at `TODO_DB_PATH`, so the command and the server must use the same configuration.
 
 ## Testing
 

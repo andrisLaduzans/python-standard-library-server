@@ -16,6 +16,7 @@ class HttpRequest:
         self.headers = headers if headers is not None else HTTPMessage()
         self.body = body
         self.auth = auth
+        self.user_id: str | None = None
 
     def json(self) -> dict:
         return json.loads(self.body)

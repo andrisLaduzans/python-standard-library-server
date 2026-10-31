@@ -8,6 +8,7 @@ from typing import Any
 
 from todo_api.db.database import Database
 from todo_api.db.todo_store import TodoStore
+from todo_api.db.token_store import TokenStore
 from todo_api.http_layer.http_handler import HttpHandler
 from todo_api.http_layer.http_method import Method
 from todo_api.http_layer.middleware import (
@@ -17,8 +18,6 @@ from todo_api.http_layer.middleware import (
 from todo_api.http_layer.router import Router, Routes
 from todo_api.http_layer.server import Server
 
-TEST_TOKEN = "test-token"
-
 
 class TestServer(unittest.TestCase):
     def setUp(self) -> None:
@@ -26,6 +25,8 @@ class TestServer(unittest.TestCase):
         database = Database(Path(self.temp_dir.name) / "todos.db")
         database.initialize()
         self.store = TodoStore(database)
+        self.token_store = TokenStore(database)
+        self.token = self.token_store.create("test-user")
 
         self.todos = [
             self.store.create(
@@ -48,6 +49,7 @@ class TestServer(unittest.TestCase):
             ("127.0.0.1", 0),
             HttpHandler,
             store=self.store,
+            token_store=self.token_store,
             router=router,
             middlewares=(RequestLoggingMiddleware, AuthenticationMiddleware),
         )
@@ -77,7 +79,7 @@ class TestServer(unittest.TestCase):
 
         default_headers = {"Content-Type": "application/json"}
         if authenticated:
-            default_headers["Authorization"] = f"Bearer {TEST_TOKEN}"
+            default_headers["Authorization"] = f"Bearer {self.token}"
 
         self.connection.request(
             method, path, body, {**default_headers, **(headers or {})}

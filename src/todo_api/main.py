@@ -1,11 +1,9 @@
 import logging
-import os
-from pathlib import Path
 
-from dotenv import load_dotenv
-
+from todo_api.config import load_db_path
 from todo_api.db.database import Database
 from todo_api.db.todo_store import TodoStore
+from todo_api.db.token_store import TokenStore
 from todo_api.http_layer.http_handler import HttpHandler
 from todo_api.http_layer.http_method import Method
 from todo_api.http_layer.middleware import (
@@ -15,7 +13,6 @@ from todo_api.http_layer.middleware import (
 from todo_api.http_layer.router import Router, Routes
 from todo_api.http_layer.server import Server
 
-load_dotenv()
 PORT = 8000
 
 
@@ -24,13 +21,11 @@ def serve():
 
     server_address = ("", PORT)
 
-    fallback_db_path = Path(__file__).resolve().parent / "todos.db"
-    db_path = Path(os.getenv("TODO_DB_PATH", fallback_db_path))
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    database = Database(db_path)
+    database = Database(load_db_path())
     database.initialize()
+
     store = TodoStore(database)
+    token_store = TokenStore(database)
 
     router = Router()
     router.add_route(Method.GET, Routes.Todos.todos, HttpHandler.get_todos)
@@ -43,6 +38,7 @@ def serve():
         server_address,
         HttpHandler,
         store,
+        token_store,
         router,
         (RequestLoggingMiddleware, AuthenticationMiddleware),
     )

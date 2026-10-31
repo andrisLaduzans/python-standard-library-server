@@ -1,7 +1,7 @@
 import socket
 from http import HTTPStatus
 
-from tests.utils.test_server import TEST_TOKEN, TestServer
+from tests.utils.test_server import TestServer
 from todo_api.error import (
     InvalidJsonError,
     MethodNotAllowedError,
@@ -236,7 +236,7 @@ class HttpHandlerTest(TestServer):
                 f"{Method.POST} {Routes.Todos.todos} HTTP/1.1\r\n"
                 "Host: localhost\r\n"
                 f"Content-Length: {MAX_REQUEST_BODY_SIZE + 1}\r\n"
-                f"Authorization: Bearer {TEST_TOKEN}\r\n"
+                f"Authorization: Bearer {self.token}\r\n"
                 "Connection: close\r\n\r\n"
             )
             sock.sendall(request.encode("ascii"))

@@ -37,6 +37,7 @@ MAX_REQUEST_BODY_SIZE = 1024 * 1024  # 1MiB
 class HttpHandler(BaseHTTPRequestHandler):
     def __init__(self, request, client_address, server: Server):
         self.store = server.store
+        self.token_store = server.token_store
         self.service = TodoService(self.store)
         self.router = server.router
         dispatch = self.__dispatch
@@ -110,7 +111,7 @@ class HttpHandler(BaseHTTPRequestHandler):
                     HTTPStatus.NOT_FOUND, NotFoundError.ERROR
                 )
 
-            elif self.http_request.auth is None:
+            elif self.http_request.user_id is None:
                 raise AuthenticationError
 
             else:

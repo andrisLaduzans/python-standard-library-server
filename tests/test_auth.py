@@ -33,3 +33,17 @@ class AuthenticationTest(TestServer):
             AuthenticationError.ERROR.message,
         )
         self.assertEqual("Bearer", response.getheader("WWW-Authenticate"))
+
+    def test_unknown_token_returns_401(self):
+        response, data = self.request(
+            Method.GET, Routes.Todos.todos, headers={"Authorization": "Bearer unknown"}
+        )
+
+        self.assert_error(
+            response,
+            data,
+            HTTPStatus.UNAUTHORIZED,
+            AuthenticationError.ERROR.code,
+            AuthenticationError.ERROR.message,
+        )
+        self.assertEqual("Bearer", response.getheader("WWW-Authenticate"))

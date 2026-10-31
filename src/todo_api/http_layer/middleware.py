@@ -5,6 +5,7 @@ from time import perf_counter
 from typing import Protocol
 from urllib.parse import urlsplit
 
+from todo_api.db.token_store import TokenStore
 from todo_api.http_layer.http_method import Method
 from todo_api.http_layer.http_request import HttpRequest
 from todo_api.http_layer.http_response import HttpResponse
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 class RequestHandlerT(Protocol):
     http_request: HttpRequest
+    token_store: TokenStore
 
 
 class Middleware(ABC):
@@ -50,7 +52,10 @@ class AuthenticationMiddleware(Middleware):
         http_request = self.handler.http_request
         authorization = http_request.headers.get("Authorization", "")
         scheme, _, token = authorization.partition(" ")
-        if scheme.lower() == "bearer" and token.strip():
-            http_request.auth = token.strip()
+        token = token.strip()
+
+        if scheme.lower() == "bearer" and token:
+            http_request.auth = token
+            http_request.user_id = self.handler.token_store.find_user_id(token)
 
         return self.next_dispatch(method)
