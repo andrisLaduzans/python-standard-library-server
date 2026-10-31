@@ -15,7 +15,12 @@ class TodoStore:
         return Todo(name, description, bool(is_done), todo_id)
 
     def create(
-        self, name: str, description: str | None = None, is_done: bool = False
+        self,
+        name: str,
+        description: str | None = None,
+        is_done: bool = False,
+        *,
+        owner_id: str,
     ) -> Todo:
         todo = Todo(name, description, is_done)
 
@@ -23,10 +28,10 @@ class TodoStore:
             with connection:
                 connection.execute(
                     """
-                    INSERT INTO todos (id, name, description, is_done)
-                    VALUES (?, ?, ?, ?) 
+                    INSERT INTO todos (id, name, description, is_done, owner_id)
+                    VALUES (?, ?, ?, ?, ?) 
                     """,
-                    (todo.uuid, todo.name, todo.description, int(todo.is_done)),
+                    (todo.uuid, todo.name, todo.description, int(todo.is_done), owner_id),
                 )
 
         return todo
@@ -39,11 +44,13 @@ class TodoStore:
         sort_by: TodoSortBy = TodoListQuery.DEFAULT_SORT_BY,
         sort_order: SortOrder = TodoListQuery.DEFAULT_SORT_ORDER,
         search: list[str] | None = None,
+        *,
+        owner_id: str,
     ) -> list[Todo]:
         query = "\nSELECT id, name, description, is_done\nFROM todos"
 
-        conditions: list[str] = []
-        params: list[int | str] = []
+        conditions: list[str] = ["(owner_id = ?)"]
+        params: list[int | str] = [owner_id]
 
         if is_done is not None:
             conditions.append("(is_done = ?)")

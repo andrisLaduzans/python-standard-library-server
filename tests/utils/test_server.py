@@ -26,13 +26,15 @@ class TestServer(unittest.TestCase):
         database.initialize()
         self.store = TodoStore(database)
         self.token_store = TokenStore(database)
-        self.token = self.token_store.create("test-user")
+        self.user_id = "test-user"
+        self.token = self.token_store.create(self.user_id)
 
         self.todos = [
             self.store.create(
                 f"todo_{idx}",
                 f"Todo Description {idx}",
                 idx % 2 == 0,
+                owner_id=self.user_id,
             )
             for idx in range(5)
         ]

@@ -164,6 +164,8 @@ class HttpHandler(BaseHTTPRequestHandler):
 
     def get_todos(self, params=None, query=None):
         query_params = TodoListQuery.from_query_params(query)
+        owner_id = self.http_request.user_id
+
         todos = self.service.get_all(
             is_done=query_params.is_done,
             limit=query_params.limit,
@@ -171,6 +173,7 @@ class HttpHandler(BaseHTTPRequestHandler):
             sort_by=query_params.sort_by,
             sort_order=query_params.sort_order,
             search=query_params.search,
+            owner_id=owner_id,
         )
         response = self.__create_response(HTTPStatus.OK, todos)
         return response
@@ -188,7 +191,9 @@ class HttpHandler(BaseHTTPRequestHandler):
     def create_todo(self, params=None, query=None):
         data = self.__parse_request()
         request = TodoCreateRequest.from_dict(data)
-        todo = self.service.create(request.name, request.description)
+        todo = self.service.create(
+            request.name, request.description, owner_id=self.http_request.user_id
+        )
         response = self.__create_response(
             HTTPStatus.CREATED, todo, {"Location": Routes.Todos.with_id(todo["id"])}
         )

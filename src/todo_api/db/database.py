@@ -25,7 +25,8 @@ class Database:
             name TEXT NOT NULL CHECK (length(trim(name)) > 0),
             description TEXT,
             is_done INTEGER NOT NULL DEFAULT 0
-            CHECK (is_done IN (0, 1))
+                CHECK (is_done IN (0, 1)),
+            owner_id TEXT
         ) 
         """)
 
@@ -55,6 +56,11 @@ class Database:
 
             connection.execute("DROP TABLE todos")
             connection.execute("ALTER TABLE todos_new RENAME TO todos")
+
+        table_info_rows = connection.execute("PRAGMA table_info(todos)")
+        columns = {row[1] for row in table_info_rows}
+        if "owner_id" not in columns:
+            connection.execute("ALTER TABLE todos ADD COLUMN owner_id TEXT")
 
     @staticmethod
     def __init_tokens_table(connection: sqlite3.Connection):

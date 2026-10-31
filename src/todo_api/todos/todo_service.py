@@ -15,8 +15,12 @@ class TodoService:
         sort_by: TodoSortBy,
         sort_order: SortOrder,
         search: list[str] | None,
+        *,
+        owner_id: str,
     ) -> list[dict]:
-        todos = self._store.read(is_done, limit, offset, sort_by, sort_order, search)
+        todos = self._store.read(
+            is_done, limit, offset, sort_by, sort_order, search, owner_id=owner_id
+        )
         return [todo.to_dict() for todo in todos]
 
     def find_by_id(self, uuid: str) -> dict:
@@ -31,8 +35,8 @@ class TodoService:
             raise TodoNotFoundError()
         return deleted.to_dict()
 
-    def create(self, name: str, description: str | None = None) -> dict:
-        todo = self._store.create(name, description)
+    def create(self, name: str, description: str | None = None, *, owner_id: str) -> dict:
+        todo = self._store.create(name, description, owner_id=owner_id)
         return todo.to_dict()
 
     def update_todo(self, uuid: str, data: dict) -> dict:

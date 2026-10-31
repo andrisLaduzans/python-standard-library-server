@@ -125,3 +125,16 @@ class DatabaseTest(unittest.TestCase):
         ) as connect:
             with closing(database.connect()):
                 connect.assert_called_once_with(self.db_path, timeout=0.1)
+
+    def test_initialize_adds_owner_id_to_existing_todos(self):
+        database = Database(self.db_path)
+        database.initialize()
+
+        with closing(database.connect()) as connection:
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(todos)")}
+            row = connection.execute(
+                "SELECT owner_id FROM todos WHERE id = ?", ("existing-id",)
+            ).fetchone()
+
+        self.assertIn("owner_id", columns)
+        self.assertEqual((None,), row)
