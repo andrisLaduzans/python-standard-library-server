@@ -1,15 +1,7 @@
-import json
 import socket
-import tempfile
-import unittest
 from http import HTTPStatus
-from http.client import HTTPConnection
-from pathlib import Path
-from threading import Thread
-from typing import Any
 
-from todo_api.db.database import Database
-from todo_api.db.todo_store import TodoStore
+from tests.utils.test_server import TEST_TOKEN, TestServer
 from todo_api.error import (
     InvalidJsonError,
     MethodNotAllowedError,
@@ -18,87 +10,13 @@ from todo_api.error import (
     TodoNotFoundError,
     ValidationError,
 )
-from todo_api.http_layer.http_handler import MAX_REQUEST_BODY_SIZE, HttpHandler
+from todo_api.http_layer.http_handler import MAX_REQUEST_BODY_SIZE
 from todo_api.http_layer.http_method import Method
-from todo_api.http_layer.middleware import RequestLoggingMiddleware
-from todo_api.http_layer.router import Router, Routes
-from todo_api.http_layer.server import Server
+from todo_api.http_layer.router import Routes
 from todo_api.todos.todo import TodoField
 
 
-class HttpHandlerTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory()
-        database = Database(Path(self.temp_dir.name) / "todos.db")
-        database.initialize()
-        self.store = TodoStore(database)
-
-        self.todos = [
-            self.store.create(
-                f"todo_{idx}",
-                f"Todo Description {idx}",
-                idx % 2 == 0,
-            )
-            for idx in range(5)
-        ]
-        self.todo = self.todos[0]
-
-        router = Router()
-        router.add_route(Method.GET, Routes.Todos.todos, HttpHandler.get_todos)
-        router.add_route(Method.POST, Routes.Todos.todos, HttpHandler.create_todo)
-        router.add_route(Method.GET, Routes.Todos.todos_id, HttpHandler.get_todo)
-        router.add_route(Method.DELETE, Routes.Todos.todos_id, HttpHandler.delete_todo)
-        router.add_route(Method.PATCH, Routes.Todos.todos_id, HttpHandler.update_todo)
-
-        self.server = Server(
-            ("127.0.0.1", 0),
-            HttpHandler,
-            store=self.store,
-            router=router,
-            middlewares=(RequestLoggingMiddleware,),
-        )
-        self.thread = Thread(target=self.server.serve_forever, daemon=True)
-        self.thread.start()
-
-        host, port = self.server.server_address
-        self.connection = HTTPConnection(host, port)
-
-    def tearDown(self) -> None:
-        self.connection.close()
-        self.server.shutdown()
-        self.server.server_close()
-        self.thread.join()
-        self.temp_dir.cleanup()
-
-    def request(
-        self,
-        method: str,
-        path: str,
-        body: dict[str, Any] | bytes | None = None,
-        headers: dict[str, str] | None = None,
-    ):
-        if isinstance(body, dict):
-            body = json.dumps(body).encode("utf-8")
-
-        self.connection.request(
-            method, path, body, headers or {"Content-Type": "application/json"}
-        )
-
-        response = self.connection.getresponse()
-        raw_body = response.read()
-        return response, json.loads(raw_body) if raw_body else None
-
-    def assert_error(
-        self,
-        response,
-        data: dict,
-        status: int,
-        code: str,
-        message: str,
-    ) -> None:
-        self.assertEqual(status, response.status)
-        self.assertEqual({"error": {"code": code, "message": message}}, data)
-
+class HttpHandlerTest(TestServer):
     def test_get_todos_returns_200(self) -> None:
         response, data = self.request(Method.GET, Routes.Todos.todos)
 
@@ -318,6 +236,7 @@ class HttpHandlerTest(unittest.TestCase):
                 f"{Method.POST} {Routes.Todos.todos} HTTP/1.1\r\n"
                 "Host: localhost\r\n"
                 f"Content-Length: {MAX_REQUEST_BODY_SIZE + 1}\r\n"
+                f"Authorization: Bearer {TEST_TOKEN}\r\n"
                 "Connection: close\r\n\r\n"
             )
             sock.sendall(request.encode("ascii"))

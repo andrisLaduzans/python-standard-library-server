@@ -1,4 +1,5 @@
 import logging
+from abc import ABC, abstractmethod
 from collections.abc import Callable
 from time import perf_counter
 from typing import Protocol
@@ -15,13 +16,18 @@ class RequestHandlerT(Protocol):
     http_request: HttpRequest
 
 
-class RequestLoggingMiddleware:
+class Middleware(ABC):
     def __init__(
         self, handler: RequestHandlerT, next_dispatch: Callable[[Method], HttpResponse]
     ):
         self.handler = handler
         self.next_dispatch = next_dispatch
 
+    @abstractmethod
+    def __call__(self, method: Method) -> HttpResponse: ...
+
+
+class RequestLoggingMiddleware(Middleware):
     def __call__(self, method: Method) -> HttpResponse:
         started_at = perf_counter()
         response = self.next_dispatch(method)
@@ -37,3 +43,14 @@ class RequestLoggingMiddleware:
         )
 
         return response
+
+
+class AuthenticationMiddleware(Middleware):
+    def __call__(self, method: Method) -> HttpResponse:
+        http_request = self.handler.http_request
+        authorization = http_request.headers.get("Authorization", "")
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() == "bearer" and token.strip():
+            http_request.auth = token.strip()
+
+        return self.next_dispatch(method)

@@ -5,6 +5,7 @@ from http.server import BaseHTTPRequestHandler
 
 from todo_api.error import (
     AppError,
+    AuthenticationError,
     ErrorCode,
     InternalError,
     InvalidJsonError,
@@ -92,8 +93,6 @@ class HttpHandler(BaseHTTPRequestHandler):
         return data
 
     def __dispatch(self, method: str) -> HttpResponse:
-        self.http_request = HttpRequest(method, self.path, self.headers)
-
         try:
             route, params, query, status, allowed_methods = self.router.resolve(
                 self.http_request
@@ -110,6 +109,10 @@ class HttpHandler(BaseHTTPRequestHandler):
                 response = self.__create_error_response(
                     HTTPStatus.NOT_FOUND, NotFoundError.ERROR
                 )
+
+            elif self.http_request.auth is None:
+                raise AuthenticationError
+
             else:
                 response = route.action(self, params, query)
 
@@ -129,6 +132,10 @@ class HttpHandler(BaseHTTPRequestHandler):
             response = self.__create_error_response(
                 HTTPStatus.UNSUPPORTED_MEDIA_TYPE, error
             )
+        except AuthenticationError as error:
+            response = self.__create_error_response(
+                HTTPStatus.UNAUTHORIZED, error, {"WWW-Authenticate": "Bearer"}
+            )
         except Exception:
             logger.exception("Unexpected error while handling request")
             response = self.__create_error_response(
@@ -138,6 +145,7 @@ class HttpHandler(BaseHTTPRequestHandler):
         return response
 
     def _handle_request(self, method: str) -> None:
+        self.http_request = HttpRequest(method, self.path, self.headers)
         response = self._dispatch(method)
         self.__send_response(response)
 

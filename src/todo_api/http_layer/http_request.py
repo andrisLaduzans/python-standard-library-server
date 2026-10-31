@@ -9,11 +9,13 @@ class HttpRequest:
         target: str,
         headers: HTTPMessage | None = None,
         body: bytes = b"",
+        auth: str | None = None,
     ):
         self.method = method
         self.target = target
         self.headers = headers if headers is not None else HTTPMessage()
         self.body = body
+        self.auth = auth
 
     def json(self) -> dict:
         return json.loads(self.body)

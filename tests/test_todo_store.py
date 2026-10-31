@@ -1,28 +1,20 @@
 import sqlite3
-import tempfile
-import unittest
-from pathlib import Path
 
-from todo_api.db.database import Database
+from tests.utils.test_store import TestStore
 from todo_api.db.todo_store import TodoStore
 from todo_api.todos.todo import TodoField
 from todo_api.todos.todo_schemas import SortOrder, TodoSortBy
 
 
-class TodoStoreTest(unittest.TestCase):
+class TodoStoreTest(TestStore):
     def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.database = Database(Path(self.temp_dir.name) / "todos.db")
-        self.database.initialize()
+        self._init_database("todos.db")
         self.store = TodoStore(self.database)
 
         self.store.create("todo_0")
         self.store.create("todo_1", is_done=True)
         self.store.create("todo_2")
         self.store.create("todo_3", is_done=True)
-
-    def tearDown(self) -> None:
-        self.temp_dir.cleanup()
 
     def test_read(self) -> None:
         entries = self.store.read()

@@ -76,3 +76,10 @@ class UnsupportedMediaTypeError(AppError):
 
     def __init__(self, message: str | None = None):
         super().__init__(self.ERROR, message)
+
+
+class AuthenticationError(AppError):
+    ERROR = ErrorCode("authentication_error", "Authentication Error")
+
+    def __init__(self, message: str | None = None):
+        super().__init__(self.ERROR, message)

@@ -8,7 +8,10 @@ from todo_api.db.database import Database
 from todo_api.db.todo_store import TodoStore
 from todo_api.http_layer.http_handler import HttpHandler
 from todo_api.http_layer.http_method import Method
-from todo_api.http_layer.middleware import RequestLoggingMiddleware
+from todo_api.http_layer.middleware import (
+    AuthenticationMiddleware,
+    RequestLoggingMiddleware,
+)
 from todo_api.http_layer.router import Router, Routes
 from todo_api.http_layer.server import Server
 
@@ -37,7 +40,11 @@ def serve():
     router.add_route(Method.PATCH, Routes.Todos.todos_id, HttpHandler.update_todo)
 
     httpd = Server(
-        server_address, HttpHandler, store, router, (RequestLoggingMiddleware,)
+        server_address,
+        HttpHandler,
+        store,
+        router,
+        (RequestLoggingMiddleware, AuthenticationMiddleware),
     )
 
     print(f"server running at http://localhost:{PORT}")

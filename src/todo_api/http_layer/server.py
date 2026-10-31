@@ -1,7 +1,7 @@
 from http.server import HTTPServer
 
 from todo_api.db.todo_store import TodoStore
-from todo_api.http_layer.middleware import RequestLoggingMiddleware
+from todo_api.http_layer.middleware import Middleware
 from todo_api.http_layer.router import Router
 
 
@@ -12,7 +12,7 @@ class Server(HTTPServer):
         request_handler_class,
         store: TodoStore,
         router: Router,
-        middlewares: tuple[type[RequestLoggingMiddleware], ...] = tuple(),
+        middlewares: tuple[type[Middleware], ...],
     ):
         self.store = store
         self.router = router
