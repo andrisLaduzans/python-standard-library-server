@@ -132,16 +132,3 @@ Run the HTTP handler tests:
 ```bash
 python -m unittest -v
 ```
-
-## Git ignore
-
-The following local files and directories should not be committed:
-
-```gitignore
-.venv/
-.env
-__pycache__/
-*.pyc
-```
-
-Keep `requirements.txt` in version control, but exclude the virtual environment itself.
