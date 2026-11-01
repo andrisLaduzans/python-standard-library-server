@@ -1,4 +1,3 @@
-import json
 import logging
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
@@ -8,14 +7,11 @@ from todo_api.error import (
     AuthenticationError,
     ErrorCode,
     InternalError,
-    InvalidJsonError,
     InvalidRequestError,
     MethodNotAllowedError,
     NotFoundError,
     PayloadTooLargeError,
-    TodoNotFoundError,
     UnsupportedMediaTypeError,
-    ValidationError,
 )
 from todo_api.http_layer.http_method import Method
 from todo_api.http_layer.http_request import HttpRequest
@@ -100,47 +96,21 @@ class HttpHandler(BaseHTTPRequestHandler):
             )
 
             if status == HTTPStatus.METHOD_NOT_ALLOWED:
-                response = self.__create_error_response(
-                    HTTPStatus.METHOD_NOT_ALLOWED,
-                    MethodNotAllowedError.ERROR,
-                    {"Allow": ", ".join(allowed_methods)},
-                )
-
+                raise MethodNotAllowedError(headers={"Allow": ", ".join(allowed_methods)})
             elif status == HTTPStatus.NOT_FOUND or not route:
-                response = self.__create_error_response(
-                    HTTPStatus.NOT_FOUND, NotFoundError.ERROR
-                )
-
+                raise NotFoundError
             elif self.http_request.user_id is None:
                 raise AuthenticationError
 
             else:
                 response = route.action(self, params, query)
 
-        except TodoNotFoundError as error:
-            response = self.__create_error_response(HTTPStatus.NOT_FOUND, error)
-        except (ValidationError, InvalidRequestError) as error:
-            response = self.__create_error_response(HTTPStatus.BAD_REQUEST, error)
-        except PayloadTooLargeError as error:
-            response = self.__create_error_response(
-                HTTPStatus.REQUEST_ENTITY_TOO_LARGE, error
-            )
-        except json.JSONDecodeError, UnicodeDecodeError:
-            response = self.__create_error_response(
-                HTTPStatus.BAD_REQUEST, InvalidJsonError.ERROR
-            )
-        except UnsupportedMediaTypeError as error:
-            response = self.__create_error_response(
-                HTTPStatus.UNSUPPORTED_MEDIA_TYPE, error
-            )
-        except AuthenticationError as error:
-            response = self.__create_error_response(
-                HTTPStatus.UNAUTHORIZED, error, {"WWW-Authenticate": "Bearer"}
-            )
+        except AppError as error:
+            response = self.__create_error_response(error.STATUS, error, error.headers)
         except Exception:
             logger.exception("Unexpected error while handling request")
             response = self.__create_error_response(
-                HTTPStatus.INTERNAL_SERVER_ERROR, InternalError.ERROR
+                InternalError.STATUS, InternalError.ERROR
             )
 
         return response

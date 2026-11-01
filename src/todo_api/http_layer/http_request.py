@@ -1,6 +1,8 @@
 import json
 from http.client import HTTPMessage
 
+from todo_api.error import InvalidJsonError
+
 
 class HttpRequest:
     def __init__(
@@ -19,4 +21,7 @@ class HttpRequest:
         self.user_id: str | None = None
 
     def json(self) -> dict:
-        return json.loads(self.body)
+        try:
+            return json.loads(self.body)
+        except (json.JSONDecodeError, UnicodeDecodeError) as error:
+            raise InvalidJsonError from error

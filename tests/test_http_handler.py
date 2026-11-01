@@ -330,3 +330,13 @@ class HttpHandlerTest(TestServer):
             Method.POST, Routes.Todos.todos, body, headers={"Content-Type": "text/plain"}
         )
         self.assertEqual(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, response.status)
+
+    def test_malformed_json_returns_400(self):
+        response, data = self.request(Method.POST, Routes.Todos.todos, b"{")
+        self.assert_error(
+            response,
+            data,
+            HTTPStatus.BAD_REQUEST,
+            InvalidJsonError.ERROR.code,
+            InvalidJsonError.ERROR.message,
+        )
