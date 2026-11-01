@@ -80,20 +80,20 @@ class TodoStore:
 
         return [self._to_todo(row) for row in rows]
 
-    def find_by_id(self, todo_id: str) -> Todo | None:
+    def find_by_id(self, todo_id: str, *, owner_id: str) -> Todo | None:
         query = """
             SELECT id, name, description, is_done
             FROM todos
-            WHERE id = ? 
+            WHERE owner_id = ? AND id = ? 
             """
-        params = (todo_id,)
+        params = (owner_id, todo_id)
 
         with closing(self._database.connect()) as connection:
             row = connection.execute(query, params).fetchone()
 
         return self._to_todo(row) if row else None
 
-    def update_todo(self, uuid: str, args: dict) -> Todo | None:
+    def update_todo(self, uuid: str, args: dict, *, owner_id: str) -> Todo | None:
         with closing(self._database.connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
 
@@ -102,9 +102,9 @@ class TodoStore:
                     """
                 SELECT id, name, description, is_done
                 FROM todos
-                WHERE id = ? 
+                WHERE owner_id = ? AND id = ? 
                 """,
-                    (uuid,),
+                    (owner_id, uuid),
                 ).fetchone()
 
                 if row is None:
@@ -117,14 +117,14 @@ class TodoStore:
                     """
                 UPDATE todos
                 SET name = ?, description = ?, is_done = ?
-                WHERE id = ? 
+                WHERE owner_id = ? AND id = ? 
                 """,
-                    (todo.name, todo.description, int(todo.is_done), todo.uuid),
+                    (todo.name, todo.description, int(todo.is_done), owner_id, todo.uuid),
                 )
 
         return todo
 
-    def delete(self, uuid: str) -> Todo | None:
+    def delete(self, uuid: str, *, owner_id: str) -> Todo | None:
         with closing(self._database.connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
 
@@ -133,9 +133,9 @@ class TodoStore:
                     """
                     SELECT id, name, description, is_done
                     FROM todos
-                    WHERE id = ? 
+                    WHERE owner_id = ? AND id = ? 
                     """,
-                    (uuid,),
+                    (owner_id, uuid),
                 ).fetchone()
 
                 if row is None:
@@ -143,8 +143,8 @@ class TodoStore:
 
                 connection.execute(
                     """
-                    DELETE FROM todos WHERE id = ?
+                    DELETE FROM todos WHERE (owner_id = ?) AND id = ?
                     """,
-                    (uuid,),
+                    (owner_id, uuid),
                 )
         return self._to_todo(row)

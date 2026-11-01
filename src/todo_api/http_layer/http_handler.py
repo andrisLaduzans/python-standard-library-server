@@ -179,12 +179,14 @@ class HttpHandler(BaseHTTPRequestHandler):
         return response
 
     def get_todo(self, params: dict, query=None):
-        todo = self.service.find_by_id(params[TodoField.ID])
+        owner_id = self.http_request.user_id
+        todo = self.service.find_by_id(params[TodoField.ID], owner_id=owner_id)
         response = self.__create_response(HTTPStatus.OK, todo)
         return response
 
     def delete_todo(self, params: dict, query=None):
-        todo = self.service.delete(params[TodoField.ID])
+        owner_id = self.http_request.user_id
+        todo = self.service.delete(params[TodoField.ID], owner_id=owner_id)
         response = self.__create_response(HTTPStatus.OK, todo)
         return response
 
@@ -202,7 +204,8 @@ class HttpHandler(BaseHTTPRequestHandler):
     def update_todo(self, params: dict, _):
         data = self.__parse_request()
         request = TodoUpdateRequest.from_dict(data)
-        todo = self.service.update_todo(params[TodoField.ID], request)
+        owner_id = self.http_request.user_id
+        todo = self.service.update_todo(params[TodoField.ID], request, owner_id=owner_id)
         response = self.__create_response(HTTPStatus.OK, todo)
         return response
 

@@ -23,14 +23,14 @@ class TodoService:
         )
         return [todo.to_dict() for todo in todos]
 
-    def find_by_id(self, uuid: str) -> dict:
-        todo = self._store.find_by_id(uuid)
+    def find_by_id(self, uuid: str, *, owner_id: str) -> dict:
+        todo = self._store.find_by_id(uuid, owner_id=owner_id)
         if not todo:
             raise TodoNotFoundError()
         return todo.to_dict()
 
-    def delete(self, uuid: str) -> dict:
-        deleted = self._store.delete(uuid)
+    def delete(self, uuid: str, *, owner_id: str) -> dict:
+        deleted = self._store.delete(uuid, owner_id=owner_id)
         if not deleted:
             raise TodoNotFoundError()
         return deleted.to_dict()
@@ -39,8 +39,8 @@ class TodoService:
         todo = self._store.create(name, description, owner_id=owner_id)
         return todo.to_dict()
 
-    def update_todo(self, uuid: str, data: dict) -> dict:
-        todo = self._store.update_todo(uuid, data)
+    def update_todo(self, uuid: str, data: dict, *, owner_id: str) -> dict:
+        todo = self._store.update_todo(uuid, data, owner_id=owner_id)
         if not todo:
             raise TodoNotFoundError()
         return todo.to_dict()

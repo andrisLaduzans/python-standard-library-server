@@ -52,12 +52,12 @@ class TodoStoreTest(TestStore):
             )
 
     def test_find_by_id(self):
-        non_exiting = self.store.find_by_id("non-existent")
+        non_exiting = self.store.find_by_id("non-existent", owner_id=self.owner_id)
         self.assertIsNone(non_exiting)
 
         with self.subTest(test="correct id"):
             all_entries = self.store.read(owner_id=self.owner_id)
-            result = self.store.find_by_id(all_entries[0].uuid)
+            result = self.store.find_by_id(all_entries[0].uuid, owner_id=self.owner_id)
 
             self.assertIsNotNone(result)
             self.assertEqual(
@@ -108,9 +108,9 @@ class TodoStoreTest(TestStore):
         )
 
         with self.assertRaises(sqlite3.IntegrityError):
-            self.store.update_todo(todo.uuid, {"name": "    "})
+            self.store.update_todo(todo.uuid, {"name": "    "}, owner_id=self.owner_id)
 
-        updated_todo = self.store.find_by_id(todo.uuid)
+        updated_todo = self.store.find_by_id(todo.uuid, owner_id=self.owner_id)
 
         self.assertIsNotNone(updated_todo)
         self.assertEqual(updated_todo.name, "Original")
@@ -131,3 +131,7 @@ class TodoStoreTest(TestStore):
         self.assertEqual(
             ["new-owner-todo-1", "new-owner-todo-2"], [entry.name for entry in entries]
         )
+
+    def test_find_by_id_ignores_other_owners_todos(self):
+        todo = self.store.create("other-todo", owner_id="user-2")
+        self.assertIsNone(self.store.find_by_id(todo.uuid, owner_id=self.owner_id))
