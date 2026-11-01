@@ -8,8 +8,6 @@ from todo_api.error import (
     ErrorCode,
     InternalError,
     InvalidRequestError,
-    MethodNotAllowedError,
-    NotFoundError,
     PayloadTooLargeError,
     UnsupportedMediaTypeError,
 )
@@ -89,21 +87,16 @@ class HttpHandler(BaseHTTPRequestHandler):
         data = self.http_request.json()
         return data
 
-    def __dispatch(self, method: str) -> HttpResponse:
+    def __dispatch(self, method: Method) -> HttpResponse:
         try:
-            route, params, query, status, allowed_methods = self.router.resolve(
-                self.http_request
+            route, params = self.router.resolve(
+                self.http_request.method, self.http_request.path
             )
 
-            if status == HTTPStatus.METHOD_NOT_ALLOWED:
-                raise MethodNotAllowedError(headers={"Allow": ", ".join(allowed_methods)})
-            elif status == HTTPStatus.NOT_FOUND or not route:
-                raise NotFoundError
-            elif self.http_request.user_id is None:
+            if self.http_request.user_id is None:
                 raise AuthenticationError
-
             else:
-                response = route.action(self, params, query)
+                response = route.action(self, params, self.http_request.query)
 
         except AppError as error:
             response = self.__create_error_response(error.STATUS, error, error.headers)
@@ -115,7 +108,7 @@ class HttpHandler(BaseHTTPRequestHandler):
 
         return response
 
-    def _handle_request(self, method: str) -> None:
+    def _handle_request(self, method: Method) -> None:
         self.http_request = HttpRequest(method, self.path, self.headers)
         response = self._dispatch(method)
         self.__send_response(response)

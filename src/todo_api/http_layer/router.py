@@ -1,9 +1,8 @@
 from collections.abc import Callable
 from enum import StrEnum
-from http import HTTPStatus
-from urllib.parse import parse_qs, urlsplit
 
-from todo_api.http_layer.http_request import HttpRequest
+from todo_api.error import MethodNotAllowedError, NotFoundError
+from todo_api.http_layer.http_method import Method
 
 
 class Routes:
@@ -17,7 +16,7 @@ class Routes:
 
 
 class Route:
-    def __init__(self, method: str, path_str: Routes.Todos, action: Callable | None):
+    def __init__(self, method: Method, path_str: Routes.Todos, action: Callable | None):
         self.method = method
         self.path_str = path_str
         self.action = action
@@ -33,21 +32,15 @@ class Router:
     def __init__(self):
         self.__routes: list[Route] = []
 
-    def add_route(self, method: str, path_str: Routes.Todos, action: Callable) -> None:
-        self.__routes.append(Route(method.upper(), path_str, action))
+    def add_route(self, method: Method, path_str: Routes.Todos, action: Callable) -> None:
+        self.__routes.append(Route(method, path_str, action))
 
-    def resolve(
-        self, http_request: HttpRequest
-    ) -> tuple[Route | None, dict, dict, int, list[str]]:
-        url = urlsplit(http_request.target)
-        query = parse_qs(url.query)
-        method = http_request.method.upper()
-
+    def resolve(self, method: Method, path: str) -> tuple[Route, dict[str, str]]:
+        path_parts = path.strip("/").split("/")
         path_matches = []
 
         for route in self.__routes:
             pattern_parts = route.path_str.strip("/").split("/")
-            path_parts = url.path.strip("/").split("/")
 
             if len(pattern_parts) != len(path_parts):
                 continue
@@ -57,8 +50,7 @@ class Router:
 
             for pattern, actual in zip(pattern_parts, path_parts, strict=True):
                 if pattern.startswith(":"):
-                    parsed_pattern = pattern[1:]
-                    params[parsed_pattern] = actual
+                    params[pattern[1:]] = actual
                 elif pattern != actual:
                     matched = False
                     break
@@ -67,11 +59,11 @@ class Router:
                 path_matches.append((route, params))
 
         if not path_matches:
-            return None, {}, query, HTTPStatus.NOT_FOUND, []
+            raise NotFoundError
 
         for route, params in path_matches:
-            if route.method == method:
-                return route, params, query, HTTPStatus.OK, []
+            if route.method == method.upper():
+                return route, params
 
-        allowed_methods = sorted({route.method for route, _ in path_matches})
-        return None, {}, query, HTTPStatus.METHOD_NOT_ALLOWED, allowed_methods
+        allowed = sorted({route.method for route, _ in path_matches})
+        raise MethodNotAllowedError(headers={"Allow": ", ".join(allowed)})

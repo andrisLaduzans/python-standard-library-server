@@ -3,7 +3,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from time import perf_counter
 from typing import Protocol
-from urllib.parse import urlsplit
 
 from todo_api.db.token_store import TokenStore
 from todo_api.http_layer.http_method import Method
@@ -39,7 +38,7 @@ class RequestLoggingMiddleware(Middleware):
         logger.info(
             "method=%s path=%s status=%s duration_ms=%.2f",
             http_request.method,
-            urlsplit(http_request.target).path,
+            http_request.path,
             response.status,
             elapsed_ms,
         )
