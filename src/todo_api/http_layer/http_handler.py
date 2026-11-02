@@ -102,9 +102,7 @@ class HttpHandler(BaseHTTPRequestHandler):
             response = self.__create_error_response(error.STATUS, error, error.headers)
         except Exception:
             logger.exception("Unexpected error while handling request")
-            response = self.__create_error_response(
-                InternalError.STATUS, InternalError.ERROR
-            )
+            response = self.__create_error_response(InternalError.STATUS, InternalError())
 
         return response
 
@@ -122,7 +120,7 @@ class HttpHandler(BaseHTTPRequestHandler):
 
     def get_todos(self, params=None, query=None):
         query_params = TodoListQuery.from_query_params(query)
-        owner_id = self.http_request.user_id
+        owner_id = self.http_request.require_user_id()
 
         todos = self.service.get_all(
             is_done=query_params.is_done,
@@ -137,13 +135,13 @@ class HttpHandler(BaseHTTPRequestHandler):
         return response
 
     def get_todo(self, params: dict, query=None):
-        owner_id = self.http_request.user_id
+        owner_id = self.http_request.require_user_id()
         todo = self.service.find_by_id(params[TodoField.ID], owner_id=owner_id)
         response = self.__create_response(HTTPStatus.OK, todo)
         return response
 
     def delete_todo(self, params: dict, query=None):
-        owner_id = self.http_request.user_id
+        owner_id = self.http_request.require_user_id()
         todo = self.service.delete(params[TodoField.ID], owner_id=owner_id)
         response = self.__create_response(HTTPStatus.OK, todo)
         return response
@@ -151,9 +149,8 @@ class HttpHandler(BaseHTTPRequestHandler):
     def create_todo(self, params=None, query=None):
         data = self.http_request.json()
         request = TodoCreateRequest.from_dict(data)
-        todo = self.service.create(
-            request.name, request.description, owner_id=self.http_request.user_id
-        )
+        user_id = self.http_request.require_user_id()
+        todo = self.service.create(request.name, request.description, owner_id=user_id)
         response = self.__create_response(
             HTTPStatus.CREATED, todo, {"Location": Routes.Todos.with_id(todo["id"])}
         )
@@ -162,7 +159,7 @@ class HttpHandler(BaseHTTPRequestHandler):
     def update_todo(self, params: dict, _):
         data = self.http_request.json()
         request = TodoUpdateRequest.from_dict(data)
-        owner_id = self.http_request.user_id
+        owner_id = self.http_request.require_user_id()
         todo = self.service.update_todo(params[TodoField.ID], request, owner_id=owner_id)
         response = self.__create_response(HTTPStatus.OK, todo)
         return response

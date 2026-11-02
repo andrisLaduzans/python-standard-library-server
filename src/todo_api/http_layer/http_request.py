@@ -3,6 +3,7 @@ from http.client import HTTPMessage
 from urllib.parse import parse_qs, urlsplit
 
 from todo_api.error import (
+    AuthenticationError,
     InvalidJsonError,
     InvalidRequestError,
     UnsupportedMediaTypeError,
@@ -46,3 +47,8 @@ class HttpRequest:
             return json.loads(self.body)
         except (json.JSONDecodeError, UnicodeDecodeError) as error:
             raise InvalidJsonError from error
+
+    def require_user_id(self) -> str:
+        if self.user_id is None:
+            raise AuthenticationError
+        return self.user_id
