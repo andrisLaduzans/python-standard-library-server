@@ -1,7 +1,7 @@
 import socket
 from http import HTTPStatus
 
-from tests.utils.test_server import TestServer
+from tests.utils.test_server import LOCALHOST_ADDRESS, TestServer
 from todo_api.error import (
     InvalidJsonError,
     MethodNotAllowedError,
@@ -231,7 +231,9 @@ class HttpHandlerTest(TestServer):
         )
 
     def test_oversized_request_returns_413(self) -> None:
-        with socket.create_connection(self.server.server_address) as sock:
+        with socket.create_connection(
+            (LOCALHOST_ADDRESS, self.server.server_port)
+        ) as sock:
             request = (
                 f"{Method.POST} {Routes.Todos.todos} HTTP/1.1\r\n"
                 "Host: localhost\r\n"

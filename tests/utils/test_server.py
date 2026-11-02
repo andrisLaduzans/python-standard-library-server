@@ -2,7 +2,7 @@ import json
 import tempfile
 import unittest
 from functools import partial
-from http.client import HTTPConnection
+from http.client import HTTPConnection, HTTPResponse
 from pathlib import Path
 from threading import Thread
 from typing import Any
@@ -18,6 +18,8 @@ from todo_api.http_layer.middleware import (
 )
 from todo_api.http_layer.router import Router, Routes
 from todo_api.http_layer.server import Server
+
+LOCALHOST_ADDRESS = "127.0.0.1"
 
 
 class TestServer(unittest.TestCase):
@@ -49,7 +51,7 @@ class TestServer(unittest.TestCase):
         router.add_route(Method.PATCH, Routes.Todos.todos_id, HttpHandler.update_todo)
 
         self.server = Server(
-            ("127.0.0.1", 0),
+            (LOCALHOST_ADDRESS, 0),
             HttpHandler,
             store=self.store,
             router=router,
@@ -61,8 +63,7 @@ class TestServer(unittest.TestCase):
         self.thread = Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
 
-        host, port = self.server.server_address
-        self.connection = HTTPConnection(host, port)
+        self.connection = HTTPConnection(LOCALHOST_ADDRESS, self.server.server_port)
 
     def tearDown(self) -> None:
         self.connection.close()
@@ -75,10 +76,10 @@ class TestServer(unittest.TestCase):
         self,
         method: str,
         path: str,
-        body: dict[str, Any] | bytes | None = None,
+        body: dict[Any, Any] | bytes | None = None,
         headers: dict[str, str] | None = None,
         authenticated: bool = True,
-    ):
+    ) -> tuple[HTTPResponse, Any]:
         if isinstance(body, dict):
             body = json.dumps(body).encode("utf-8")
 

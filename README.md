@@ -71,6 +71,12 @@ Format Python files
 python -m ruff format .
 ````
 
+### 6. Type-check
+
+  ```bash
+  python -m pyright
+  ```
+
 ## Configuration
 
 Create a `.env` file in the project root:
