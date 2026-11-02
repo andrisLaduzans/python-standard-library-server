@@ -1,4 +1,5 @@
 import logging
+from functools import partial
 
 from todo_api.config import load_db_path
 from todo_api.db.database import Database
@@ -38,9 +39,11 @@ def serve():
         server_address,
         HttpHandler,
         store,
-        token_store,
         router,
-        (RequestLoggingMiddleware, AuthenticationMiddleware),
+        middlewares=(
+            RequestLoggingMiddleware,
+            partial(AuthenticationMiddleware, token_store=token_store),
+        ),
     )
 
     print(f"server running at http://localhost:{PORT}")

@@ -30,12 +30,11 @@ MAX_REQUEST_BODY_SIZE = 1024 * 1024  # 1MiB
 class HttpHandler(BaseHTTPRequestHandler):
     def __init__(self, request, client_address, server: Server):
         self.store = server.store
-        self.token_store = server.token_store
         self.service = TodoService(self.store)
         self.router = server.router
         dispatch = self.__dispatch
-        for middleware_class in reversed(server.middlewares):
-            dispatch = middleware_class(self, dispatch)
+        for middleware in reversed(server.middlewares):
+            dispatch = middleware(dispatch)
         self._dispatch = dispatch
         self.http_request: HttpRequest
 
@@ -64,7 +63,7 @@ class HttpHandler(BaseHTTPRequestHandler):
             return
 
         self.http_request = HttpRequest(method, self.path, self.headers, body)
-        response = self._dispatch(method)
+        response = self._dispatch(self.http_request)
         self.__send_response(response)
 
     def __create_response(
@@ -91,16 +90,13 @@ class HttpHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(response.body)
 
-    def __dispatch(self, method: Method) -> HttpResponse:
+    def __dispatch(self, request: HttpRequest) -> HttpResponse:
         try:
-            route, params = self.router.resolve(
-                self.http_request.method, self.http_request.path
-            )
+            route, params = self.router.resolve(request.method, request.path)
 
-            if self.http_request.user_id is None:
+            if request.user_id is None:
                 raise AuthenticationError
-            else:
-                response = route.action(self, params, self.http_request.query)
+            response = route.action(self, params, request.query)
 
         except AppError as error:
             response = self.__create_error_response(error.STATUS, error, error.headers)

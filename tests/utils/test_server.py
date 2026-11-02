@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from functools import partial
 from http.client import HTTPConnection
 from pathlib import Path
 from threading import Thread
@@ -51,9 +52,11 @@ class TestServer(unittest.TestCase):
             ("127.0.0.1", 0),
             HttpHandler,
             store=self.store,
-            token_store=self.token_store,
             router=router,
-            middlewares=(RequestLoggingMiddleware, AuthenticationMiddleware),
+            middlewares=(
+                RequestLoggingMiddleware,
+                partial(AuthenticationMiddleware, token_store=self.token_store),
+            ),
         )
         self.thread = Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
