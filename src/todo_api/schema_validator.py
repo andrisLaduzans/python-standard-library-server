@@ -1,3 +1,4 @@
+from collections.abc import Container
 from enum import StrEnum
 from typing import TypeVar
 
@@ -29,7 +30,7 @@ class SchemaValidator:
             raise ValidationError(f"{method} Body Must Not Be Empty")
 
     @staticmethod
-    def _validate_writable_fields(fields: list, data: dict):
+    def _validate_writable_fields(fields: Container[str], data: dict):
         for field in data:
             if field not in fields:
                 raise ValidationError(f"Unknown Field '{field}'")

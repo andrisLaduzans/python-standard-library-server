@@ -16,7 +16,7 @@ class Routes:
 
 
 class Route:
-    def __init__(self, method: Method, path_str: Routes.Todos, action: Callable | None):
+    def __init__(self, method: Method, path_str: Routes.Todos, action: Callable):
         self.method = method
         self.path_str = path_str
         self.action = action

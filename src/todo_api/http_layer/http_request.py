@@ -1,5 +1,5 @@
 import json
-from http.client import HTTPMessage
+from email.message import Message
 from urllib.parse import parse_qs, urlsplit
 
 from todo_api.error import (
@@ -16,13 +16,13 @@ class HttpRequest:
         self,
         method: Method,
         target: str,
-        headers: HTTPMessage | None = None,
+        headers: Message | None = None,
         body: bytes = b"",
         auth: str | None = None,
     ):
         self.method = method
         self.target = target
-        self.headers = headers if headers is not None else HTTPMessage()
+        self.headers = headers if headers is not None else Message()
         self.body = body
         self.auth = auth
         self.user_id: str | None = None
