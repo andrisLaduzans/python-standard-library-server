@@ -112,7 +112,7 @@ class TodoStoreTest(TestStore):
 
         updated_todo = self.store.find_by_id(todo.uuid, owner_id=self.owner_id)
 
-        self.assertIsNotNone(updated_todo)
+        assert updated_todo is not None
         self.assertEqual(updated_todo.name, "Original")
 
     def test_create_stores_owner_id(self):

@@ -36,5 +36,5 @@ class TestOwnership(TestServer):
                 )
 
         unchanged = self.store.find_by_id(other.uuid, owner_id="other-user")
-        self.assertIsNotNone(unchanged)
+        assert unchanged is not None
         self.assertEqual("other-todo", unchanged.name)
