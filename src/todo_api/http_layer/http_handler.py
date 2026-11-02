@@ -9,7 +9,6 @@ from todo_api.error import (
     InternalError,
     InvalidRequestError,
     PayloadTooLargeError,
-    UnsupportedMediaTypeError,
 )
 from todo_api.http_layer.http_method import Method
 from todo_api.http_layer.http_request import HttpRequest
@@ -42,6 +41,32 @@ class HttpHandler(BaseHTTPRequestHandler):
 
         super().__init__(request, client_address, server)
 
+    def _read_body(self) -> bytes:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError as error:
+            raise InvalidRequestError from error
+
+        if length < 0:
+            raise InvalidRequestError
+        if length > MAX_REQUEST_BODY_SIZE:
+            raise PayloadTooLargeError
+
+        return self.rfile.read(length)
+
+    def _handle_request(self, method: Method) -> None:
+        try:
+            body = self._read_body()
+        except AppError as error:
+            self.__send_response(
+                self.__create_error_response(error.STATUS, error, error.headers)
+            )
+            return
+
+        self.http_request = HttpRequest(method, self.path, self.headers, body)
+        response = self._dispatch(method)
+        self.__send_response(response)
+
     def __create_response(
         self, status: int, data: dict | list, headers: dict[str, str] | None = None
     ) -> HttpResponse:
@@ -66,27 +91,6 @@ class HttpHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(response.body)
 
-    def __parse_request(self) -> dict:
-        try:
-            content_length = int(self.http_request.headers.get("Content-Length", "0"))
-        except ValueError as error:
-            raise InvalidRequestError from error
-
-        if content_length <= 0:
-            raise InvalidRequestError
-
-        if content_length > MAX_REQUEST_BODY_SIZE:
-            raise PayloadTooLargeError
-
-        content_type = self.http_request.headers.get("Content-Type", "")
-        if not content_type.startswith("application/json"):
-            raise UnsupportedMediaTypeError
-
-        body = self.rfile.read(content_length)
-        self.http_request.body = body
-        data = self.http_request.json()
-        return data
-
     def __dispatch(self, method: Method) -> HttpResponse:
         try:
             route, params = self.router.resolve(
@@ -107,11 +111,6 @@ class HttpHandler(BaseHTTPRequestHandler):
             )
 
         return response
-
-    def _handle_request(self, method: Method) -> None:
-        self.http_request = HttpRequest(method, self.path, self.headers)
-        response = self._dispatch(method)
-        self.__send_response(response)
 
     def do_GET(self):
         self._handle_request(Method.GET)
@@ -154,7 +153,7 @@ class HttpHandler(BaseHTTPRequestHandler):
         return response
 
     def create_todo(self, params=None, query=None):
-        data = self.__parse_request()
+        data = self.http_request.json()
         request = TodoCreateRequest.from_dict(data)
         todo = self.service.create(
             request.name, request.description, owner_id=self.http_request.user_id
@@ -165,7 +164,7 @@ class HttpHandler(BaseHTTPRequestHandler):
         return response
 
     def update_todo(self, params: dict, _):
-        data = self.__parse_request()
+        data = self.http_request.json()
         request = TodoUpdateRequest.from_dict(data)
         owner_id = self.http_request.user_id
         todo = self.service.update_todo(params[TodoField.ID], request, owner_id=owner_id)

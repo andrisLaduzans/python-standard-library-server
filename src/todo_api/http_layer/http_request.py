@@ -2,7 +2,11 @@ import json
 from http.client import HTTPMessage
 from urllib.parse import parse_qs, urlsplit
 
-from todo_api.error import InvalidJsonError
+from todo_api.error import (
+    InvalidJsonError,
+    InvalidRequestError,
+    UnsupportedMediaTypeError,
+)
 from todo_api.http_layer.http_method import Method
 
 
@@ -31,6 +35,13 @@ class HttpRequest:
         return parse_qs(urlsplit(self.target).query)
 
     def json(self) -> dict:
+        if not self.body:
+            raise InvalidRequestError
+
+        content_type = self.headers.get("Content-Type", "")
+        if not content_type.startswith("application/json"):
+            raise UnsupportedMediaTypeError
+
         try:
             return json.loads(self.body)
         except (json.JSONDecodeError, UnicodeDecodeError) as error:
