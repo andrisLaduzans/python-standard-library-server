@@ -1,6 +1,8 @@
 import json
 from dataclasses import dataclass, field
 
+from todo_api.error import AppError
+
 
 @dataclass
 class HttpResponse:
@@ -14,3 +16,11 @@ class HttpResponse:
     ) -> HttpResponse:
         body = json.dumps(data).encode("utf-8")
         return cls(status, body, headers or {})
+
+    @classmethod
+    def error(cls, error: AppError) -> HttpResponse:
+        return cls.json(
+            error.STATUS,
+            {"error": {"code": error.code, "message": error.message}},
+            error.headers,
+        )
