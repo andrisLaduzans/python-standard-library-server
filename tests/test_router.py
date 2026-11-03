@@ -2,15 +2,21 @@ import unittest
 
 from todo_api.error import MethodNotAllowedError, NotFoundError
 from todo_api.http_layer.http_method import Method
+from todo_api.http_layer.http_request import HttpRequest
+from todo_api.http_layer.http_response import HttpResponse
 from todo_api.http_layer.router import Router, Routes
 from todo_api.todos.todo import TodoField
+
+
+def view(request: HttpRequest, params: dict[str, str]) -> HttpResponse:
+    return HttpResponse.json(200, {})
 
 
 class TestRouter(unittest.TestCase):
     def setUp(self):
         self.router = Router()
-        self.router.add_route(Method.GET, Routes.Todos.todos, lambda: None)
-        self.router.add_route(Method.GET, Routes.Todos.todos_id, lambda: None)
+        self.router.add_route(Method.GET, Routes.Todos.todos, view)
+        self.router.add_route(Method.GET, Routes.Todos.todos_id, view)
 
     def test_resolve_returns_matching_route(self):
         route, _ = self.router.resolve(Method.GET, Routes.Todos.todos)

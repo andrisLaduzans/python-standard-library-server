@@ -13,6 +13,8 @@ from todo_api.http_layer.middleware import (
 )
 from todo_api.http_layer.router import Router, Routes
 from todo_api.http_layer.server import Server
+from todo_api.todos.todo_service import TodoService
+from todo_api.todos.views import TodoViews
 
 PORT = 8000
 
@@ -27,13 +29,14 @@ def serve():
 
     store = TodoStore(database)
     token_store = TokenStore(database)
+    views = TodoViews(TodoService(store))
 
     router = Router()
-    router.add_route(Method.GET, Routes.Todos.todos, HttpHandler.get_todos)
-    router.add_route(Method.POST, Routes.Todos.todos, HttpHandler.create_todo)
-    router.add_route(Method.GET, Routes.Todos.todos_id, HttpHandler.get_todo)
-    router.add_route(Method.DELETE, Routes.Todos.todos_id, HttpHandler.delete_todo)
-    router.add_route(Method.PATCH, Routes.Todos.todos_id, HttpHandler.update_todo)
+    router.add_route(Method.GET, Routes.Todos.todos, views.list_todos)
+    router.add_route(Method.POST, Routes.Todos.todos, views.create_todo)
+    router.add_route(Method.GET, Routes.Todos.todos_id, views.get_todo)
+    router.add_route(Method.DELETE, Routes.Todos.todos_id, views.delete_todo)
+    router.add_route(Method.PATCH, Routes.Todos.todos_id, views.update_todo)
 
     httpd = Server(
         server_address,

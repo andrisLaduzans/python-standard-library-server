@@ -3,6 +3,10 @@ from enum import StrEnum
 
 from todo_api.error import MethodNotAllowedError, NotFoundError
 from todo_api.http_layer.http_method import Method
+from todo_api.http_layer.http_request import HttpRequest
+from todo_api.http_layer.http_response import HttpResponse
+
+type View = Callable[[HttpRequest, dict[str, str]], HttpResponse]
 
 
 class Routes:
@@ -16,12 +20,12 @@ class Routes:
 
 
 class Route:
-    def __init__(self, method: Method, path_str: Routes.Todos, action: Callable):
+    def __init__(self, method: Method, path_str: Routes.Todos, action: View):
         self.method = method
         self.path_str = path_str
         self.action = action
 
-    def __str__(self) -> Routes.Todos:
+    def __str__(self) -> str:
         return self.path_str
 
     def to_dict(self) -> dict:
@@ -32,8 +36,8 @@ class Router:
     def __init__(self):
         self.__routes: list[Route] = []
 
-    def add_route(self, method: Method, path_str: Routes.Todos, action: Callable) -> None:
-        self.__routes.append(Route(method, path_str, action))
+    def add_route(self, method: Method, path_str: Routes.Todos, view: View) -> None:
+        self.__routes.append(Route(method, path_str, view))
 
     def resolve(self, method: Method, path: str) -> tuple[Route, dict[str, str]]:
         path_parts = path.strip("/").split("/")
