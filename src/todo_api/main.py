@@ -11,6 +11,7 @@ from todo_api.http_layer.http_handler import HttpHandler
 from todo_api.http_layer.http_method import Method
 from todo_api.http_layer.middleware import (
     AuthenticationMiddleware,
+    RequestIdMiddleware,
     RequestLoggingMiddleware,
 )
 from todo_api.http_layer.router import Router, Routes
@@ -42,6 +43,7 @@ def serve():
     app = App(
         router,
         middlewares=(
+            RequestIdMiddleware,
             RequestLoggingMiddleware,
             partial(AuthenticationMiddleware, token_store=token_store),
         ),

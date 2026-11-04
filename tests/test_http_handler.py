@@ -359,3 +359,20 @@ class HttpHandlerTest(TestServer):
         with self.assertLogs("todo_api.http_layer.middleware", level="INFO") as logs:
             self.request(Method.GET, Routes.Todos.todos, authenticated=False)
         self.assertIn("user_id=-", logs.output[0])
+
+    def test_response_includes_generated_request_id(self):
+        response, _ = self.request(Method.GET, Routes.Todos.todos)
+        self.assertEqual(32, len(response.getheader("X-Request-ID", "")))
+
+    def test_error_response_includes_request_id(self):
+        response, _ = self.request(Method.GET, "/unknown")
+        self.assertEqual(HTTPStatus.NOT_FOUND, response.status)
+        self.assertIsNotNone(response.getheader("X-Request-ID"))
+
+    def test_incoming_request_id_is_echoed_and_logged(self):
+        with self.assertLogs("todo_api.http_layer.middleware", level="INFO") as logs:
+            response, _ = self.request(
+                Method.GET, Routes.Todos.todos, headers={"X-Request-ID": "trace-123"}
+            )
+        self.assertEqual("trace-123", response.getheader("X-Request-ID"))
+        self.assertIn("request_id=trace-123", logs.output[0])
