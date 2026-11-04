@@ -27,11 +27,12 @@ class RequestLoggingMiddleware(Middleware):
         elapsed_ms = (perf_counter() - started_at) * 1000
 
         logger.info(
-            "method=%s path=%s status=%s duration_ms=%.2f",
+            "method=%s path=%s status=%s duration_ms=%.2f user_id=%s",
             request.method,
             request.path,
             response.status,
             elapsed_ms,
+            request.user_id or "-",
         )
 
         return response

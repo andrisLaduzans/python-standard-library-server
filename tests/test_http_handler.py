@@ -349,3 +349,13 @@ class HttpHandlerTest(TestServer):
         with patch("sys.stderr", new_callable=io.StringIO) as stderr:
             self.request(Method.GET, Routes.Todos.todos)
         self.assertEqual("", stderr.getvalue())
+
+    def test_request_log_includes_user_id(self):
+        with self.assertLogs("todo_api.http_layer.middleware", level="INFO") as logs:
+            self.request(Method.GET, Routes.Todos.todos)
+        self.assertIn(f"user_id={self.user_id}", logs.output[0])
+
+    def test_request_log_marks_anonymous_use(self):
+        with self.assertLogs("todo_api.http_layer.middleware", level="INFO") as logs:
+            self.request(Method.GET, Routes.Todos.todos, authenticated=False)
+        self.assertIn("user_id=", logs.output[0])
