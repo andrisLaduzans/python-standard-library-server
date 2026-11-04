@@ -358,4 +358,4 @@ class HttpHandlerTest(TestServer):
     def test_request_log_marks_anonymous_use(self):
         with self.assertLogs("todo_api.http_layer.middleware", level="INFO") as logs:
             self.request(Method.GET, Routes.Todos.todos, authenticated=False)
-        self.assertIn("user_id=", logs.output[0])
+        self.assertIn("user_id=-", logs.output[0])
