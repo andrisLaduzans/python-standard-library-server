@@ -1,5 +1,7 @@
+import io
 import socket
 from http import HTTPStatus
+from unittest.mock import patch
 
 from tests.utils.test_server import LOCALHOST_ADDRESS, TestServer
 from todo_api.error import (
@@ -342,3 +344,8 @@ class HttpHandlerTest(TestServer):
             InvalidJsonError.ERROR.code,
             InvalidJsonError.ERROR.message,
         )
+
+    def test_standard_library_access_log_is_silenced(self):
+        with patch("sys.stderr", new_callable=io.StringIO) as stderr:
+            self.request(Method.GET, Routes.Todos.todos)
+        self.assertEqual("", stderr.getvalue())

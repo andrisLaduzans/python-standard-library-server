@@ -72,3 +72,6 @@ class HttpHandler(BaseHTTPRequestHandler):
                 code, {"error": {"code": "unknown_error", "message": message}}
             )
         )
+
+    def log_request(self, code="-", size="-"):
+        pass
