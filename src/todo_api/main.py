@@ -1,10 +1,12 @@
 import logging
 from functools import partial
+from http.server import HTTPServer
 
 from todo_api.config import load_db_path
 from todo_api.db.database import Database
 from todo_api.db.todo_store import TodoStore
 from todo_api.db.token_store import TokenStore
+from todo_api.http_layer.app import App
 from todo_api.http_layer.http_handler import HttpHandler
 from todo_api.http_layer.http_method import Method
 from todo_api.http_layer.middleware import (
@@ -12,7 +14,6 @@ from todo_api.http_layer.middleware import (
     RequestLoggingMiddleware,
 )
 from todo_api.http_layer.router import Router, Routes
-from todo_api.http_layer.server import Server
 from todo_api.todos.todo_service import TodoService
 from todo_api.todos.views import TodoViews
 
@@ -38,17 +39,14 @@ def serve():
     router.add_route(Method.DELETE, Routes.Todos.todos_id, views.delete_todo)
     router.add_route(Method.PATCH, Routes.Todos.todos_id, views.update_todo)
 
-    httpd = Server(
-        server_address,
-        HttpHandler,
-        store,
+    app = App(
         router,
         middlewares=(
             RequestLoggingMiddleware,
             partial(AuthenticationMiddleware, token_store=token_store),
         ),
     )
-
+    httpd = HTTPServer(server_address, partial(HttpHandler, app=app))
     print(f"server running at http://localhost:{PORT}")
     httpd.serve_forever()
 

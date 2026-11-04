@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from functools import partial
 from http.client import HTTPConnection, HTTPResponse
+from http.server import HTTPServer
 from pathlib import Path
 from threading import Thread
 from typing import Any
@@ -10,6 +11,7 @@ from typing import Any
 from todo_api.db.database import Database
 from todo_api.db.todo_store import TodoStore
 from todo_api.db.token_store import TokenStore
+from todo_api.http_layer.app import App
 from todo_api.http_layer.http_handler import HttpHandler
 from todo_api.http_layer.http_method import Method
 from todo_api.http_layer.middleware import (
@@ -17,7 +19,6 @@ from todo_api.http_layer.middleware import (
     RequestLoggingMiddleware,
 )
 from todo_api.http_layer.router import Router, Routes
-from todo_api.http_layer.server import Server
 from todo_api.todos.todo_service import TodoService
 from todo_api.todos.views import TodoViews
 
@@ -54,16 +55,14 @@ class TestServer(unittest.TestCase):
         router.add_route(Method.DELETE, Routes.Todos.todos_id, views.delete_todo)
         router.add_route(Method.PATCH, Routes.Todos.todos_id, views.update_todo)
 
-        self.server = Server(
-            (LOCALHOST_ADDRESS, 0),
-            HttpHandler,
-            store=self.store,
-            router=router,
+        app = App(
+            router,
             middlewares=(
                 RequestLoggingMiddleware,
                 partial(AuthenticationMiddleware, token_store=self.token_store),
             ),
         )
+        self.server = HTTPServer((LOCALHOST_ADDRESS, 0), partial(HttpHandler, app=app))
         self.thread = Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
 
