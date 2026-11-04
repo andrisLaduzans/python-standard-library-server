@@ -26,6 +26,7 @@ class HttpRequest:
         self.body = body
         self.auth = auth
         self.user_id: str | None = None
+        self.request_id: str | None = None
 
     @property
     def path(self) -> str:

@@ -1,4 +1,6 @@
 import logging
+import re
+import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from time import perf_counter
@@ -18,6 +20,23 @@ class Middleware(ABC):
 
     @abstractmethod
     def __call__(self, request: HttpRequest) -> HttpResponse: ...
+
+
+REQUEST_ID_HEADER = "X-Request-ID"
+VALID_REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{1,128}")
+
+
+class RequestIdMiddleware(Middleware):
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        incoming = request.headers.get(REQUEST_ID_HEADER, "")
+        request_id = (
+            incoming if VALID_REQUEST_ID.fullmatch(incoming) else uuid.uuid4().hex
+        )
+        request.request_id = request_id
+
+        response = self.get_response(request)
+        response.headers[REQUEST_ID_HEADER] = request_id
+        return response
 
 
 class RequestLoggingMiddleware(Middleware):
